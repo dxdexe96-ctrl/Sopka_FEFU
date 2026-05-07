@@ -16,7 +16,10 @@ class Event(Base):
     event_name: Mapped[str] = mapped_column(String(500))
     event_level: Mapped[str] = mapped_column(String(50))
     organizer_name: Mapped[str | None] = mapped_column(String(255))
-    organization_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("organizations.organization_id", ondelete="SET NULL"))
+    event_type_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("event_types.event_type_id", ondelete="RESTRICT"),
+    )
 
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)

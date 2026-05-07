@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers.bank_details import router as bank_details_router
 from app.routers.events import router as events_router
+from app.routers.event_types import router as event_types_router
 from app.routers.students import router as students_router
 
 API_PREFIX = "/api/v1"
@@ -26,6 +27,7 @@ app.add_middleware(
 app.include_router(students_router, prefix=API_PREFIX)
 app.include_router(bank_details_router, prefix=API_PREFIX)
 app.include_router(events_router, prefix=API_PREFIX)
+app.include_router(event_types_router, prefix=API_PREFIX)
 
 
 @app.get("/health")
