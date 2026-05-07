@@ -10,7 +10,7 @@ class EventCreate(BaseModel):
     event_name: str = Field(..., max_length=500)
     event_level: str = Field(..., max_length=50)
     organizer_name: str | None = Field(None, max_length=255)
-    organization_id: int | None = None
+    event_type_id: int | None = None
 
     start_date: date
     end_date: date | None = None
@@ -25,7 +25,7 @@ class EventUpdate(BaseModel):
     event_name: str | None = Field(None, max_length=500)
     event_level: str | None = Field(None, max_length=50)
     organizer_name: str | None = Field(None, max_length=255)
-    organization_id: int | None = None
+    event_type_id: int | None = None
 
     start_date: date | None = None
     end_date: date | None = None
@@ -43,7 +43,7 @@ class EventRead(BaseModel):
     event_name: str
     event_level: str
     organizer_name: str | None
-    organization_id: int | None
+    event_type_id: int | None
 
     start_date: date
     end_date: date | None
