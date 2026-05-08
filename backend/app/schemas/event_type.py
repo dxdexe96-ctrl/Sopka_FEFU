@@ -20,3 +20,7 @@ class EventTypeRead(BaseModel):
     is_active: bool
     created_at: datetime
 
+class EventTypeUpdate(BaseModel):
+    event_type_name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = None
+    is_active: bool | None = None
