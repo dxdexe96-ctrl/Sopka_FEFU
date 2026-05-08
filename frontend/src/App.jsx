@@ -5,6 +5,7 @@ import { ParticipantEditPage } from './pages/ParticipantEditPage.jsx';
 import { ParticipantImportPage } from './pages/ParticipantImportPage.jsx';
 import { ParticipantRegistrationPage } from './pages/ParticipantRegistrationPage.jsx';
 import { ParticipantsDatabasePage } from './pages/ParticipantsDatabasePage.jsx';
+import { EventCreatePage } from './pages/EventCreatePage.jsx';
 import './styles/app.css';
 
 function getRouteFromHash() {
@@ -26,7 +27,8 @@ export default function App() {
   }, []);
 
   const isEditPage = routeName === 'edit' && routeParam;
-  const isWidePage = route === 'create' || route === 'database' || route === 'import' || isEditPage;
+  const isWidePage = route === 'create' || route === 'database' || route === 'import' || route === 'create-event' || isEditPage;
+ 
 
   return (
     <div className="app-shell">
@@ -36,7 +38,8 @@ export default function App() {
         {route === 'import' ? <ParticipantImportPage /> : null}
         {route === 'database' ? <ParticipantsDatabasePage /> : null}
         {isEditPage ? <ParticipantEditPage studentId={routeParam} /> : null}
-        {route !== 'create' && route !== 'import' && route !== 'database' && !isEditPage ? <HomePage /> : null}
+        {route === 'create-event' ? <EventCreatePage /> : null}
+        {route !== 'create' && route !== 'import' && route !== 'database' && route !== 'create-event' && !isEditPage ? <HomePage /> : null}
       </main>
     </div>
   );
