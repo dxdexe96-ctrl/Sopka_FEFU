@@ -61,8 +61,8 @@ const digitInputProps = {
   autoComplete: 'off',
 };
 
+// Убрали regex-валидацию строки, теперь проверяем длину цифр
 const validationPatterns = {
-  phone: /^\+7\(\d{3}\)\d{3}-\d{2}-\d{2}$/,
   passportSeries: /^\d{4}$/,
   passportNumber: /^\d{6}$/,
   passportDepartmentCode: /^\d{3}-\d{3}$/,
@@ -77,39 +77,27 @@ function getDigits(value) {
   return value.replace(/\D/g, '');
 }
 
+// Маска телефона: +7(000)000-00-00
 function formatPhone(value) {
-  const rawDigits = getDigits(value);
-  const hasCountryCode = value.startsWith('+7') || (rawDigits.length > 10 && /^[78]/.test(rawDigits));
-  const digits = (hasCountryCode ? rawDigits.slice(1) : rawDigits).slice(0, 10);
-  const area = digits.slice(0, 3);
-  const prefix = digits.slice(3, 6);
-  const firstPair = digits.slice(6, 8);
-  const secondPair = digits.slice(8, 10);
-
-  if (!digits) {
-    return '';
+  const digits = value.replace(/\D/g, '');
+  let normalized = digits;
+  
+  // Нормализация: 8 -> 7, отсутствие кода -> +7
+  if (normalized.startsWith('8')) {
+    normalized = '7' + normalized.slice(1);
+  } else if (!normalized.startsWith('7') && normalized.length > 0) {
+    normalized = '7' + normalized;
   }
+  normalized = normalized.slice(0, 11); // Максимум 11 цифр
+
+  if (!normalized) return '';
 
   let formatted = '+7';
-
-  if (area) {
-    formatted += `(${area}`;
-    if (area.length === 3) {
-      formatted += ')';
-    }
-  }
-
-  if (prefix) {
-    formatted += prefix;
-  }
-
-  if (firstPair) {
-    formatted += `-${firstPair}`;
-  }
-
-  if (secondPair) {
-    formatted += `-${secondPair}`;
-  }
+  if (normalized.length > 1) formatted += `(${normalized.slice(1, 4)}`;
+  if (normalized.length >= 4) formatted += `)`;
+  if (normalized.length > 4) formatted += normalized.slice(4, 7);
+  if (normalized.length > 7) formatted += `-${normalized.slice(7, 9)}`;
+  if (normalized.length > 9) formatted += `-${normalized.slice(9, 11)}`;
 
   return formatted;
 }
@@ -119,36 +107,25 @@ function formatDate(value) {
   const day = digits.slice(0, 2);
   const month = digits.slice(2, 4);
   const year = digits.slice(4, 8);
-
   return [day, month, year].filter(Boolean).join('.');
 }
 
 function toApiDate(value) {
   const match = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-
-  if (!match) {
-    return '';
-  }
-
+  if (!match) return '';
   const [, day, month, year] = match;
   const date = new Date(Number(year), Number(month) - 1, Number(day));
   const isValidDate =
     date.getFullYear() === Number(year) &&
     date.getMonth() === Number(month) - 1 &&
     date.getDate() === Number(day);
-
-  if (!isValidDate) {
-    return '';
-  }
-
-  return `${year}-${month}-${day}`;
+  return isValidDate ? `${year}-${month}-${day}` : '';
 }
 
 function formatDepartmentCode(value) {
   const digits = getDigits(value).slice(0, 6);
   const firstPart = digits.slice(0, 3);
   const secondPart = digits.slice(3, 6);
-
   return secondPart ? `${firstPart}-${secondPart}` : firstPart;
 }
 
@@ -158,7 +135,6 @@ function formatSnils(value) {
   const secondPart = digits.slice(3, 6);
   const thirdPart = digits.slice(6, 9);
   const controlPart = digits.slice(9, 11);
-
   return [firstPart, secondPart, thirdPart].filter(Boolean).join('-') + (controlPart ? ` ${controlPart}` : '');
 }
 
@@ -243,30 +219,22 @@ function hasValue(value) {
 function getValidationMessages(formData) {
   const messages = [];
 
-  if (!hasValue(formData.last_name)) {
-    messages.push('Укажите фамилию.');
-  }
-
-  if (!hasValue(formData.first_name)) {
-    messages.push('Укажите имя.');
-  }
-
+  if (!hasValue(formData.last_name)) messages.push('Укажите фамилию.');
+  if (!hasValue(formData.first_name)) messages.push('Укажите имя.');
+  
   if (!hasValue(formData.birth_date)) {
     messages.push('Укажите дату рождения.');
   } else if (!toApiDate(formData.birth_date)) {
     messages.push('Дата рождения должна быть корректной и в формате 00.00.0000.');
   }
 
-  if (!formData.institute) {
-    messages.push('Выберите институт.');
-  }
+  if (!formData.institute) messages.push('Выберите институт.');
+  if (!hasValue(formData.study_group)) messages.push('Укажите группу.');
 
-  if (!hasValue(formData.study_group)) {
-    messages.push('Укажите группу.');
-  }
-
-  if (hasValue(formData.phone) && !validationPatterns.phone.test(formData.phone)) {
-    messages.push('Телефон должен быть в формате +7(000)000-00-00.');
+  // ✅ Проверка телефона: 11 цифр (без учёта маски)
+  const phoneDigits = formData.phone ? formData.phone.replace(/\D/g, '') : '';
+  if (hasValue(formData.phone) && phoneDigits.length !== 11) {
+    messages.push('Телефон должен содержать 11 цифр.');
   }
 
   if (hasValue(formData.corporate_email) && !validationPatterns.email.test(formData.corporate_email)) {
@@ -276,57 +244,31 @@ function getValidationMessages(formData) {
   if (hasValue(formData.passport_series) && !validationPatterns.passportSeries.test(formData.passport_series)) {
     messages.push('Серия паспорта должна состоять из 4 цифр.');
   }
-
   if (hasValue(formData.passport_number) && !validationPatterns.passportNumber.test(formData.passport_number)) {
     messages.push('Номер паспорта должен состоять из 6 цифр.');
   }
-
   if (hasValue(formData.passport_issue_date) && !toApiDate(formData.passport_issue_date)) {
     messages.push('Дата выдачи паспорта должна быть корректной и в формате 00.00.0000.');
   }
-
-  if (
-    hasValue(formData.passport_department_code) &&
-    !validationPatterns.passportDepartmentCode.test(formData.passport_department_code)
-  ) {
+  if (hasValue(formData.passport_department_code) && !validationPatterns.passportDepartmentCode.test(formData.passport_department_code)) {
     messages.push('Код подразделения должен быть в формате 000-000.');
   }
-
   if (hasValue(formData.snils) && !validationPatterns.snils.test(formData.snils)) {
     messages.push('СНИЛС должен быть в формате 000-000-000 00.');
   }
-
   if (hasValue(formData.inn) && !validationPatterns.inn.test(formData.inn)) {
     messages.push('ИНН должен состоять из 12 цифр.');
   }
 
   const hasBankDetails = [formData.bank_name, formData.bik, formData.correspondent_account, formData.account_number].some(hasValue);
-
   if (hasBankDetails) {
-    if (!hasValue(formData.bank_name)) {
-      messages.push('Для банковских реквизитов укажите наименование банка.');
-    }
-
-    if (!hasValue(formData.bik)) {
-      messages.push('Для банковских реквизитов укажите БИК.');
-    }
-
-    if (!hasValue(formData.account_number)) {
-      messages.push('Для банковских реквизитов укажите номер счета.');
-    }
+    if (!hasValue(formData.bank_name)) messages.push('Для банковских реквизитов укажите наименование банка.');
+    if (!hasValue(formData.bik)) messages.push('Для банковских реквизитов укажите БИК.');
+    if (!hasValue(formData.account_number)) messages.push('Для банковских реквизитов укажите номер счета.');
   }
-
-  if (hasValue(formData.bik) && !validationPatterns.bik.test(formData.bik)) {
-    messages.push('БИК должен состоять из 9 цифр.');
-  }
-
-  if (hasValue(formData.correspondent_account) && !validationPatterns.bankAccount.test(formData.correspondent_account)) {
-    messages.push('Корреспондентский счет должен состоять из 20 цифр.');
-  }
-
-  if (hasValue(formData.account_number) && !validationPatterns.bankAccount.test(formData.account_number)) {
-    messages.push('Номер счета должен состоять из 20 цифр.');
-  }
+  if (hasValue(formData.bik) && !validationPatterns.bik.test(formData.bik)) messages.push('БИК должен состоять из 9 цифр.');
+  if (hasValue(formData.correspondent_account) && !validationPatterns.bankAccount.test(formData.correspondent_account)) messages.push('Корреспондентский счет должен состоять из 20 цифр.');
+  if (hasValue(formData.account_number) && !validationPatterns.bankAccount.test(formData.account_number)) messages.push('Номер счета должен состоять из 20 цифр.');
 
   return messages;
 }
@@ -356,11 +298,7 @@ export function ParticipantRegistrationPage() {
   function handleChange(event) {
     const { name, value } = event.target;
     const nextValue = fieldFormatters[name] ? fieldFormatters[name](value) : value;
-
-    setFormData((current) => ({
-      ...current,
-      [name]: nextValue,
-    }));
+    setFormData((current) => ({ ...current, [name]: nextValue }));
   }
 
   async function handleSubmit(event) {
@@ -374,6 +312,10 @@ export function ParticipantRegistrationPage() {
     setIsSubmitting(true);
     setStatus({ type: 'idle', message: '' });
 
+    // ✅ Преобразуем телефон: убираем маску, оставляем только цифры, конвертируем в Number для bigint
+    const phoneDigits = formData.phone ? formData.phone.replace(/\D/g, '') : '';
+    const phoneValue = phoneDigits.length === 11 ? Number(phoneDigits) : null;
+
     const studentPayload = {
       last_name: formData.last_name.trim(),
       first_name: formData.first_name.trim(),
@@ -381,7 +323,7 @@ export function ParticipantRegistrationPage() {
       birth_date: toApiDate(formData.birth_date),
       study_group: formData.study_group.trim(),
       institute: formData.institute,
-      phone: sanitizeOptional(formData.phone),
+      phone: phoneValue, // ✅ Отправляем число (bigint)
       email: null,
       corporate_email: sanitizeOptional(formData.corporate_email),
       registration_address: sanitizeOptional(formData.registration_address),
@@ -439,6 +381,9 @@ export function ParticipantRegistrationPage() {
           На главную
         </a>
         <h1 className="registration-page__title">Регистрация</h1>
+        <a className="registration-page__import-link" href="#import">
+          Перейти к загрузке из файла
+        </a>
       </div>
 
       <form className="registration-page__form" onSubmit={handleSubmit}>
@@ -497,10 +442,9 @@ export function ParticipantRegistrationPage() {
               name="phone"
               value={formData.phone}
               onChange={handleChange}
-              placeholder="+7(000)000-00-00"
-              maxLength={16}
-              pattern="\+7\(\d{3}\)\d{3}-\d{2}-\d{2}"
-              title="Введите 10 цифр телефона в формате +7(000)000-00-00"
+              placeholder="+7 (___) ___-__-__"
+              maxLength={18}
+              title="Введите 11 цифр телефона"
               {...digitInputProps}
             />
             <FormField

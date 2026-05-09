@@ -35,18 +35,21 @@
   gap: 24px;
 }
 
+/* Блок мероприятия */
 .form-section {
   background: #eef4fb;
   border-radius: 12px;
   padding: 24px;
 }
 
+/* Сетка 2 колонки */
 .events-form__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 24px;
 }
 
+/* Поле ввода */
 .events-form__field {
   display: grid;
   grid-template-columns: 170px minmax(0, 1fr);
@@ -97,12 +100,14 @@ textarea.events-form__control {
   min-height: 80px;
 }
 
+/* Блок участников */
 .participants-section {
   background: #eef4fb;
   border-radius: 12px;
   padding: 24px;
 }
 
+/* Заголовок с кнопкой сворачивания и плюсом */
 .participants-section__header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -132,6 +137,7 @@ textarea.events-form__control {
   margin-left: 8px;
 }
 
+/* Кнопка плюс в заголовке */
 .participants-section__plus-btn {
   position: relative;
   width: 32px;
@@ -167,6 +173,7 @@ textarea.events-form__control {
   border-radius: 30px;
 }
 
+/* Стрелка сворачивания */
 .participants-section__toggle {
   background: none;
   border: none;
@@ -192,6 +199,7 @@ textarea.events-form__control {
   transform: rotate(180deg);
 }
 
+/* Таблица участников */
 .participants-table {
   width: 100%;
   display: flex;
@@ -207,20 +215,24 @@ textarea.events-form__control {
   font-size: 0.9rem;
 }
 
+/* Обертка карточки + кнопка удаления */
 .participant-wrapper {
   display: flex;
   align-items: flex-start;
   gap: 16px;
 }
 
+/* Карточка участника */
 .participant-card {
   flex: 1;
   border: 1px solid #397AB2;
   border-radius: 8px;
-  overflow: hidden;
+  /* overflow: visible;  <- Важно для выпадающего списка */
+  overflow: visible; 
   background: #f8fafc;
 }
 
+/* Кнопка удаления участника (снаружи) */
 .participant-card__remove-outside {
   width: 28px;
   height: 28px;
@@ -244,6 +256,7 @@ textarea.events-form__control {
   transform: scale(1.1);
 }
 
+/* Верхняя строка карточки: ФИО | Роль | Телефон */
 .participant-card__main {
   display: grid;
   grid-template-columns: 1fr 140px 1fr;
@@ -253,6 +266,7 @@ textarea.events-form__control {
   background: #ffffff;
   border-bottom: 1px solid #e0e8f0;
   width: 100%;
+  border-radius: 8px 8px 0 0; /* Скругление только сверху */
 }
 
 .participant-card__fio {
@@ -293,12 +307,14 @@ textarea.events-form__control {
   letter-spacing: 0.3px;
 }
 
+/* Нижняя строка карточки - время */
 .participant-card__time {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 12px 16px;
   background: #f8fafc;
+  border-radius: 0 0 8px 8px; /* Скругление только снизу */
 }
 
 .participant-card__duration {
@@ -324,6 +340,7 @@ textarea.events-form__control {
   flex: 1;
 }
 
+/* Ввод временного слота */
 .time-slot-input {
   display: inline-flex;
   align-items: center;
@@ -397,6 +414,7 @@ textarea.events-form__control {
   color: #e74c3c;
 }
 
+/* Кнопка добавления времени */
 .participant-card__add-time {
   width: 28px;
   height: 28px;
@@ -416,6 +434,7 @@ textarea.events-form__control {
   background: #e0e8f0;
 }
 
+/* Контейнер для плюса по центру (в развернутом виде) */
 .participants-section__plus-container {
   display: flex;
   justify-content: center;
@@ -423,16 +442,58 @@ textarea.events-form__control {
   margin-top: 16px;
 }
 
+/* ===== АВТОДОПОЛНЕНИЕ ФИО (НОВОЕ) ===== */
+.student-input-wrapper {
+  position: relative;
+  width: 100%;
+  z-index: 100; /* Чтобы выпадающий список был поверх других элементов */
+}
+
+.student-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 9999; 
+  background: #ffffff;
+  border: 1px solid #b8c6d7;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.student-suggestion-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #22384a;
+  transition: background 0.15s;
+}
+
+.student-suggestion-item:hover {
+  background: #eef4fb;
+}
+
+.student-suggestion-item:active {
+  background: #dce6f0;
+}
+
+/* ===== БЛОК ВАЛИДАЦИИ И КНОПКИ ===== */
 .form-actions {
   display: grid;
-  grid-template-columns: 1fr auto 1fr; 
+  grid-template-columns: 1fr auto 1fr; /* 3 колонки: пустая, контент, кнопка */
   align-items: start;
   gap: 24px;
   width: 100%;
 }
 
 .form-validation {
-  grid-column: 2;
+  grid-column: 2; /* Валидация строго по центру */
   max-width: 480px;
   width: 100%;
   padding: 18px 24px;
@@ -478,8 +539,8 @@ textarea.events-form__control {
 }
 
 .form-submit {
-  grid-column: 3; 
-  justify-self: end; 
+  grid-column: 3; /* Кнопка в правой колонке */
+  justify-self: end; /* Прижимаем кнопку вправо */
   min-width: 220px;
   padding: 14px 28px;
   border: 0;
@@ -503,6 +564,7 @@ textarea.events-form__control {
   opacity: 0.55;
 }
 
+/* Адаптив */
 @media (max-width: 980px) {
   .events-form__grid {
     grid-template-columns: 1fr;
@@ -557,6 +619,7 @@ textarea.events-form__control {
     flex-wrap: wrap;
   }
   
+  /* На мобильных всё в одну колонку */
   .form-actions {
     grid-template-columns: 1fr;
     gap: 16px;

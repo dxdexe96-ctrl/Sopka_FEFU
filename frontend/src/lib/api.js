@@ -112,4 +112,65 @@ export async function importStudentsExcel(file, { mode = 'update' } = {}) {
   });
 }
 
+export async function createEvent(payload) {
+  return request('/events', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
+export async function listEvents({ skip = 0, limit = 50 } = {}) {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit),
+  });
+  return request(`/events?${params.toString()}`);
+}
+
+export async function getEvent(eventId) {
+  return request(`/events/${eventId}`);
+}
+
+export async function updateEvent(eventId, payload) {
+  return request(`/events/${eventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
+export async function deleteEvent(eventId) {
+  return request(`/events/${eventId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listEventTypes({ skip = 0, limit = 50, isActive = null } = {}) {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit),
+  });
+  if (isActive !== null) {
+    params.set('is_active', String(isActive));
+  }
+  return request(`/event-types?${params.toString()}`);
+}
+
+export async function createEventType(payload) {
+  return request('/event-types', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
 export { API_BASE_URL };
+
+
