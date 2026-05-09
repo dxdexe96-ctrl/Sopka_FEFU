@@ -4,11 +4,12 @@ import asyncpg.exceptions
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.api import commit_session
 from app.database import get_session
 from app.models.event_type import EventType
-from app.schemas.event_type import EventTypeCreate, EventTypeRead
+from app.schemas.event_type import EventTypeCreate, EventTypeRead, EventTypeUpdate
 
 router = APIRouter(prefix="/event-types", tags=["event-types"])
 
@@ -45,6 +46,22 @@ async def get_event_type(
     if event_type is None:
         raise HTTPException(status_code=404, detail="Тип мероприятия не найден.")
     return event_type
+
+@router.get("", response_model=list[EventTypeRead])
+async def list_event_types(
+    session: AsyncSession = Depends(get_session),
+    skip: int = 0,
+    limit: int = 50,
+    is_active: bool | None = None,
+) -> list[EventType]:
+    """Получение списка типов мероприятий"""
+    stmt = select(EventType).order_by(EventType.event_type_name).offset(skip).limit(limit)
+    
+    if is_active is not None:
+        stmt = stmt.where(EventType.is_active.is_(is_active))
+    
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
 @router.patch("/{event_type_id}", response_model=EventTypeRead)
