@@ -12,7 +12,7 @@ class StudentCreate(BaseModel):
     study_group: str = Field(..., max_length=50)
     institute: str = Field(..., max_length=255)
 
-    phone: str | None = Field(None, max_length=30)
+    phone: int | None = None
     email: str | None = Field(None, max_length=255)
     corporate_email: str | None = Field(None, max_length=255)
 
@@ -41,7 +41,7 @@ class StudentUpdate(BaseModel):
     study_group: str | None = Field(None, max_length=50)
     institute: str | None = Field(None, max_length=255)
 
-    phone: str | None = Field(None, max_length=30)
+    phone: int | None = None
     email: str | None = Field(None, max_length=255)
     corporate_email: str | None = Field(None, max_length=255)
 
@@ -73,7 +73,7 @@ class StudentRead(BaseModel):
     study_group: str
     institute: str
 
-    phone: str | None
+    phone: int | None 
     email: str | None
     corporate_email: str | None
 
