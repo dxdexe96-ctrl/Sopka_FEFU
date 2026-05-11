@@ -1,8 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getEventType } from '../lib/api.js';
 import './EventCreatePage.css';
 
 export function EventViewModal({ event, onClose }) {
   const [isParticipantsExpanded, setIsParticipantsExpanded] = useState(true);
+  const [eventTypeName, setEventTypeName] = useState('—');
+
+  // Загружаем название типа мероприятия
+  useEffect(() => {
+    async function loadEventType() {
+      if (event?.event_type_id) {
+        try {
+          const type = await getEventType(event.event_type_id);
+          setEventTypeName(type.event_type_name);
+        } catch (err) {
+          console.error('Не удалось загрузить тип мероприятия:', err);
+          setEventTypeName('—');
+        }
+      } else {
+        setEventTypeName('—');
+      }
+    }
+    loadEventType();
+  }, [event]);
 
   if (!event) return null;
 
@@ -35,7 +55,6 @@ export function EventViewModal({ event, onClose }) {
           <div className="event-create-page__form">
             <div className="form-section">
               <div className="events-form__grid">
-                {/* ← Все поля теперь читаются из API-ответа */}
                 <div className="events-form__field">
                   <label className="events-form__label">Название</label>
                   <input className="events-form__control" value={event.event_name} readOnly />
@@ -46,7 +65,7 @@ export function EventViewModal({ event, onClose }) {
                 </div>
                 <div className="events-form__field">
                   <label className="events-form__label">Тип мероприятия</label>
-                  <input className="events-form__control" value={event.event_type || '—'} readOnly />
+                  <input className="events-form__control" value={eventTypeName} readOnly />
                 </div>
                 <div className="events-form__field">
                   <label className="events-form__label">Организатор</label>
@@ -95,7 +114,6 @@ export function EventViewModal({ event, onClose }) {
               {isParticipantsExpanded && (
                 <div className="participants-table">
                   <div className="participants-section__count">Всего: {event.participants?.length || event.participants_planned || 0}</div>
-                  {/* Карточки участников — добавите позже */}
                 </div>
               )}
             </div>

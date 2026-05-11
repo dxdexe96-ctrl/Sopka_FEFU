@@ -171,6 +171,10 @@ export async function createEventType(payload) {
   });
 }
 
+export async function getEventType(eventTypeId) {
+  return request(`/event-types/${eventTypeId}`);
+}
+
 export { API_BASE_URL };
 
 

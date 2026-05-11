@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getEvent, updateEvent } from '../lib/api.js';
+import { useState, useEffect, useRef } from 'react';
+import { getEvent, updateEvent, listEventTypes, createEventType } from '../lib/api.js';
 import './EventCreatePage.css';
 
 const eventLevelOptions = [
@@ -58,6 +58,60 @@ function TimeSlotInput({ slot, onChange, onRemove }) {
   );
 }
 
+function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapperRef = useRef(null);
+
+  function handleChange(e) {
+    const val = e.target.value;
+    onChange(val);
+    if (val.length >= 1 && eventTypesList && eventTypesList.length > 0) {
+      const search = val.toLowerCase().trim();
+      const filtered = eventTypesList
+        .filter(et => (et.event_type_name || '').toLowerCase().startsWith(search))
+        .slice(0, 10);
+      setSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setShowSuggestions(false);
+      setSuggestions([]);
+    }
+  }
+
+  function handleSelect(eventType) {
+    onChange(eventType.event_type_name);
+    onSelectEventType({ eventTypeId: eventType.event_type_id, eventTypeName: eventType.event_type_name });
+    setShowSuggestions(false);
+    setSuggestions([]);
+  }
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="student-input-wrapper" ref={wrapperRef}>
+      <input className="events-form__control" type="text" placeholder="Тип мероприятия" value={value} onChange={handleChange} autoComplete="off" />
+      {showSuggestions && suggestions.length > 0 && (
+        <ul className="student-suggestions">
+          {suggestions.map((et) => (
+            <li key={et.event_type_id} className="student-suggestion-item" onClick={() => handleSelect(et)}>
+              {et.event_type_name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ParticipantCard({ participant, index, onRemove, onAddTimeSlot, onUpdateTimeSlot, onRemoveTimeSlot }) {
   return (
     <div className="participant-wrapper">
@@ -96,8 +150,9 @@ export function EventEditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [eventId, setEventId] = useState(null);
+  const [eventTypesCache, setEventTypesCache] = useState([]);
+  const [eventData, setEventData] = useState(null); // ✅ Храним сырые данные мероприятия
 
-  // Получаем event_id из URL (поддерживает #/edit-event?id=123 и ?id=123)
   useEffect(() => {
     const hash = window.location.hash;
     const queryString = hash.includes('?') ? hash.split('?')[1] : window.location.search;
@@ -112,7 +167,20 @@ export function EventEditPage() {
     }
   }, []);
 
-  // Загрузка данных мероприятия
+  // ✅ Загрузка типов мероприятий
+  useEffect(() => {
+    let isMounted = true;
+    async function loadEventTypes() {
+      try {
+        const data = await listEventTypes({ limit: 200, isActive: true });
+        if (isMounted) setEventTypesCache(data);
+      } catch (err) { console.error('Не удалось загрузить типы мероприятий:', err); }
+    }
+    loadEventTypes();
+    return () => { isMounted = false; };
+  }, []);
+
+  // ✅ Загрузка данных мероприятия
   useEffect(() => {
     if (!eventId) return;
 
@@ -121,8 +189,8 @@ export function EventEditPage() {
         setLoading(true);
         setError('');
         const event = await getEvent(eventId);
+        setEventData(event); // Сохраняем сырые данные
         
-        // Форматируем время из ISO в локальный формат для input
         const formatTimeForInput = (isoString) => {
           if (!isoString) return '';
           const date = new Date(isoString);
@@ -138,7 +206,7 @@ export function EventEditPage() {
         setFormData({
           event_name: event.event_name || '',
           event_level: event.event_level || '',
-          event_type: event.event_type || '',
+          event_type: '', // Пока пусто, заполним после загрузки типов
           organizer_name: event.organizer_name || '',
           start_date: formatDateForInput(event.start_date),
           end_date: formatDateForInput(event.end_date),
@@ -163,32 +231,41 @@ export function EventEditPage() {
     loadEvent();
   }, [eventId]);
 
+  // ✅ Заполняем тип мероприятия после загрузки и мероприятия, и типов
+  useEffect(() => {
+    if (eventData && eventTypesCache.length > 0 && eventData.event_type_id) {
+      const type = eventTypesCache.find(et => et.event_type_id === eventData.event_type_id);
+      if (type) {
+        setFormData(prev => ({ ...prev, event_type: type.event_type_name }));
+      }
+    }
+  }, [eventData, eventTypesCache]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  function formatForApi() {
-    const payload = {
-      event_name: formData.event_name.trim(),
-      event_level: formData.event_level,
-      organizer_name: formData.organizer_name?.trim() || null,
-      event_type: formData.event_type?.trim() || null,
-      start_date: formData.start_date || null,
-      end_date: formData.end_date || null,
-      participants_planned: formData.participants_planned ? parseInt(formData.participants_planned) : null,
-      duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
-      event_comment: formData.event_comment?.trim() || null,
-    };
-
-    if (formData.start_date && formData.start_time) {
-      payload.start_time = `${formData.start_date}T${formData.start_time}:00`;
+  async function resolveEventTypeId(typeName) {
+    if (!typeName) return null;
+    
+    const existing = eventTypesCache.find(
+      et => et.event_type_name.toLowerCase() === typeName.toLowerCase()
+    );
+    if (existing) return existing.event_type_id;
+    
+    try {
+      const newType = await createEventType({
+        event_type_name: typeName,
+        description: null,
+        is_active: true,
+      });
+      setEventTypesCache(prev => [...prev, newType]);
+      return newType.event_type_id;
+    } catch (err) {
+      console.error('Не удалось создать тип:', err);
+      return null;
     }
-    if (formData.end_date && formData.end_time) {
-      payload.end_time = `${formData.end_date}T${formData.end_time}:00`;
-    }
-
-    return payload;
   }
 
   const handleSubmit = async (e) => {
@@ -204,10 +281,28 @@ export function EventEditPage() {
     setError('');
 
     try {
-      const payload = formatForApi();
+      const eventTypeId = await resolveEventTypeId(formData.event_type?.trim());
+
+      const payload = {
+        event_name: formData.event_name.trim(),
+        event_level: formData.event_level,
+        event_type_id: eventTypeId,
+        organizer_name: formData.organizer_name?.trim() || null,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+        participants_planned: formData.participants_planned ? parseInt(formData.participants_planned) : null,
+        duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
+        event_comment: formData.event_comment?.trim() || null,
+      };
+
+      if (formData.start_date && formData.start_time) {
+        payload.start_time = `${formData.start_date}T${formData.start_time}:00`;
+      }
+      if (formData.end_date && formData.end_time) {
+        payload.end_time = `${formData.end_date}T${formData.end_time}:00`;
+      }
+
       await updateEvent(eventId, payload);
-      
-      // Возвращаемся к списку мероприятий через hash-навигацию
       window.location.hash = 'events-list';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
@@ -260,7 +355,17 @@ export function EventEditPage() {
           <div className="events-form__grid">
             <FormField label="Название" name="event_name" value={formData.event_name} onChange={handleChange} required />
             <FormField label="Уровень" name="event_level" value={formData.event_level} onChange={handleChange} as="select" options={eventLevelOptions} required />
-            <FormField label="Тип мероприятия" name="event_type" value={formData.event_type} onChange={handleChange} />
+            
+            <div className="events-form__field">
+              <label className="events-form__label" htmlFor="event_type">Тип мероприятия</label>
+              <EventTypeInput
+                value={formData.event_type}
+                eventTypesList={eventTypesCache}
+                onChange={(val) => setFormData(prev => ({ ...prev, event_type: val }))}
+                onSelectEventType={() => {}}
+              />
+            </div>
+            
             <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} placeholder="ФИО" />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
             <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />

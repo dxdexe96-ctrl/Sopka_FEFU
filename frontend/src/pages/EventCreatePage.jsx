@@ -193,7 +193,7 @@ function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) 
 
   return (
     <div className="student-input-wrapper" ref={wrapperRef}>
-      <input className="events-form__control" type="text" placeholder="Начните вводить тип" value={value} onChange={handleChange} autoComplete="off" />
+      <input className="events-form__control" type="text" placeholder="Тип мероприятия" value={value} onChange={handleChange} autoComplete="off" />
       {showSuggestions && suggestions.length > 0 && (
         <ul className="student-suggestions">
           {suggestions.map((et) => (
@@ -448,7 +448,7 @@ export function EventCreatePage() {
               />
             </div>
             
-            <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} placeholder="ФИО" />
+            <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
             <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
