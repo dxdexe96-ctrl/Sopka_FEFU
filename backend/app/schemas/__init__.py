@@ -4,8 +4,13 @@ from app.schemas.bank_details import (
     BankDetailsUpdate,
 )
 from app.schemas.event import EventCreate, EventRead, EventUpdate
-from app.schemas.event_type import EventTypeCreate, EventTypeRead
+from app.schemas.event_type import EventTypeCreate, EventTypeRead, EventTypeUpdate
 from app.schemas.student import StudentCreate, StudentRead, StudentUpdate
+from app.schemas.event_participation import (
+    EventParticipationCreate,
+    EventParticipationRead,
+    EventParticipationUpdate,
+)
 
 __all__ = [
     "StudentCreate",
@@ -19,4 +24,8 @@ __all__ = [
     "EventUpdate",
     "EventTypeCreate",
     "EventTypeRead",
+    "EventTypeUpdate",
+    "EventParticipationCreate",
+    "EventParticipationRead",
+    "EventParticipationUpdate",
 ]
