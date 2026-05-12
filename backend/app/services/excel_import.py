@@ -297,6 +297,10 @@ class ExcelImportService:
         digits = "".join(ch for ch in s if ch.isdigit())
         return digits or None
 
+    def _normalize_phone(self, value: Any) -> int | None:
+        digits = self._normalize_id_field(value)
+        return int(digits) if digits else None
+
     def _prepare_student(self, row: pd.Series) -> dict[str, Any]:
         student: dict[str, Any] = {}
         for field in self.STUDENTS_FIELDS:
@@ -305,6 +309,8 @@ class ExcelImportService:
                 student[field] = val
             elif field in ["snils", "inn"]:
                 student[field] = self._normalize_id_field(val)
+            elif field == "phone":
+                student[field] = self._normalize_phone(val)
             elif field in ["last_name", "first_name", "study_group", "institute"]:
                 student[field] = str(val).strip() if pd.notna(val) else None
             else:

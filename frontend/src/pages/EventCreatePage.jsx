@@ -183,20 +183,29 @@ function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef(null);
 
+  function getSuggestions(searchValue = '') {
+    if (!eventTypesList || eventTypesList.length === 0) {
+      return [];
+    }
+
+    const search = searchValue.toLowerCase().trim();
+    if (!search) {
+      return eventTypesList;
+    }
+
+    return eventTypesList.filter(et => (et.event_type_name || '').toLowerCase().includes(search));
+  }
+
+  function openSuggestions(searchValue = value) {
+    const nextSuggestions = getSuggestions(searchValue);
+    setSuggestions(nextSuggestions);
+    setShowSuggestions(nextSuggestions.length > 0);
+  }
+
   function handleChange(e) {
     const val = e.target.value;
     onChange(val);
-    if (val.length >= 1 && eventTypesList && eventTypesList.length > 0) {
-      const search = val.toLowerCase().trim();
-      const filtered = eventTypesList
-        .filter(et => (et.event_type_name || '').toLowerCase().startsWith(search))
-        .slice(0, 10);
-      setSuggestions(filtered);
-      setShowSuggestions(filtered.length > 0);
-    } else {
-      setShowSuggestions(false);
-      setSuggestions([]);
-    }
+    openSuggestions(val);
   }
 
   function handleSelect(eventType) {
@@ -218,7 +227,16 @@ function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) 
 
   return (
     <div className="student-input-wrapper" ref={wrapperRef}>
-      <input className="events-form__control" type="text" placeholder="Тип мероприятия" value={value} onChange={handleChange} autoComplete="off" />
+      <input
+        className="events-form__control"
+        type="text"
+        placeholder="Тип мероприятия"
+        value={value}
+        onChange={handleChange}
+        onFocus={() => openSuggestions()}
+        onClick={() => openSuggestions()}
+        autoComplete="off"
+      />
       {showSuggestions && suggestions.length > 0 && (
         <ul className="student-suggestions">
           {suggestions.map((et) => (
