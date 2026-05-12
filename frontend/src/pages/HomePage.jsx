@@ -6,6 +6,16 @@ const actions = [
   { id: 'database', label: 'Просмотреть список участников', href: '#database' },
 ];
 
+const eventActions = [
+  { id: 'create-event', label: 'Создать мероприятие', href: '#create-event' },
+  { id: 'events-list', label: 'Посмотреть список мероприятий', href: '#events-list' },
+];
+
 export function HomePage() {
-  return <ActionPanel title="Работа с участниками СОПКи" actions={actions} />;
+    return (
+    <div className="home-page">
+      <ActionPanel title="Работа с участниками СОПКи" actions={actions} />
+      <ActionPanel title="Работа с мероприятиями" actions={eventActions} />
+    </div>
+    );
 }
