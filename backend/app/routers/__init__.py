@@ -4,7 +4,7 @@ from app.routers.event_types import router as event_types_router
 from app.routers.students import router as students_router
 from app.routers.event_participation import (
     router as event_participation_router,
-    global_router as participants_router,
+    root as participants_router,
 )
 
 __all__ = [
