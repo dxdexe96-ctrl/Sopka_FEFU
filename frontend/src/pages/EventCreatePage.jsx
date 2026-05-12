@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { createEvent, listStudents, listEventTypes, createEventType } from '../lib/api.js';
+import { createEvent, createEventParticipant, listStudents, listEventTypes, createEventType } from '../lib/api.js';
 import './EventCreatePage.css';
 
 const eventLevelOptions = [
@@ -57,6 +57,31 @@ function getValidationMessages(formData) {
   if (!hasValue(formData.event_level)) messages.push('Выберите уровень.');
   if (!hasValue(formData.start_date)) messages.push('Укажите дату начала.');
   return messages;
+}
+
+function getParticipantValidationMessages(participants) {
+  const messages = [];
+  participants.forEach((participant, index) => {
+    const number = index + 1;
+    if (!participant.student_id) {
+      messages.push(`Выберите участника ${number} из списка студентов.`);
+    }
+    if (!participant.role) {
+      messages.push(`Укажите роль участника ${number}.`);
+    }
+  });
+  return messages;
+}
+
+function buildParticipantNotes(participant) {
+  const slots = participant.timeSlots
+    .filter((slot) => slot.date || slot.start || slot.end)
+    .map((slot) => [slot.date, slot.start && slot.end ? `${slot.start}-${slot.end}` : `${slot.start || ''}${slot.end ? `-${slot.end}` : ''}`]
+      .filter(Boolean)
+      .join(' '))
+    .filter(Boolean);
+
+  return slots.length > 0 ? `Интервалы участия: ${slots.join('; ')}` : null;
 }
 
 function FormField({ label, name, value, onChange, required = false, type = 'text', placeholder = '', as = 'input', options = [], disabled = false }) {
@@ -347,12 +372,14 @@ export function EventCreatePage() {
     }));
   }
 
-  function canSubmit() { return getValidationMessages(formData).length === 0; }
+  function canSubmit() {
+    return getValidationMessages(formData).length === 0 && getParticipantValidationMessages(participants).length === 0;
+  }
 
   // ✅ Отправка формы с созданием типа мероприятия если нужно
   async function handleSubmit(event) {
     event.preventDefault();
-    const validationMessages = getValidationMessages(formData);
+    const validationMessages = [...getValidationMessages(formData), ...getParticipantValidationMessages(participants)];
     if (validationMessages.length > 0) {
       setStatus({ type: 'error', messages: validationMessages });
       return;
@@ -405,10 +432,24 @@ export function EventCreatePage() {
         event_comment: formData.event_comment?.trim() || null,
       };
       
-      if (formData.start_date && formData.start_time) payload.start_time = `${formData.start_date}T${formData.start_time}:00`;
-      if (formData.end_date && formData.end_time) payload.end_time = `${formData.end_date}T${formData.end_time}:00`;
+      if (formData.start_time) payload.start_time = `${formData.start_time}:00`;
+      if (formData.end_time) payload.end_time = `${formData.end_time}:00`;
       
-      await createEvent(payload);
+      const createdEvent = await createEvent(payload);
+      const participantPayloads = participants
+        .filter((participant) => participant.student_id && participant.role)
+        .map((participant) => ({
+          student_id: participant.student_id,
+          role_name: participant.role,
+          participation_status: 'planned',
+          notes: buildParticipantNotes(participant),
+        }));
+
+      await Promise.all(
+        participantPayloads.map((participantPayload) =>
+          createEventParticipant(createdEvent.event_id, participantPayload)
+        )
+      );
       setStatus({ type: 'success', message: 'Мероприятие успешно создано!' });
       setFormData(initialFormState);
       setParticipants([]);
@@ -422,7 +463,7 @@ export function EventCreatePage() {
   }
 
   const isValid = canSubmit();
-  const validationMessages = getValidationMessages(formData);
+  const validationMessages = [...getValidationMessages(formData), ...getParticipantValidationMessages(participants)];
 
   return (
     <div className="event-create-page">

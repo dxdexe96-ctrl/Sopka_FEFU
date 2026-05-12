@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
-import { getEventType } from '../lib/api.js';
+import { getEventType, listEventParticipants, listStudents } from '../lib/api.js';
 import './EventCreatePage.css';
+
+function getStudentName(student) {
+  return [student?.last_name, student?.first_name, student?.middle_name].filter(Boolean).join(' ');
+}
 
 export function EventViewModal({ event, onClose }) {
   const [isParticipantsExpanded, setIsParticipantsExpanded] = useState(true);
   const [eventTypeName, setEventTypeName] = useState('—');
+  const [participants, setParticipants] = useState([]);
+  const [studentsById, setStudentsById] = useState({});
 
   // Загружаем название типа мероприятия
   useEffect(() => {
@@ -22,6 +28,40 @@ export function EventViewModal({ event, onClose }) {
       }
     }
     loadEventType();
+  }, [event]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadParticipants() {
+      if (!event?.event_id) return;
+
+      try {
+        const [eventParticipants, students] = await Promise.all([
+          listEventParticipants(event.event_id),
+          listStudents({ limit: 200, isActive: true }),
+        ]);
+
+        if (!isMounted) return;
+
+        setParticipants(eventParticipants);
+        setStudentsById(
+          students.reduce((acc, student) => {
+            acc[student.student_id] = student;
+            return acc;
+          }, {})
+        );
+      } catch (err) {
+        console.error('Не удалось загрузить участников мероприятия:', err);
+        if (isMounted) {
+          setParticipants([]);
+          setStudentsById({});
+        }
+      }
+    }
+
+    loadParticipants();
+    return () => { isMounted = false; };
   }, [event]);
 
   if (!event) return null;
@@ -113,7 +153,28 @@ export function EventViewModal({ event, onClose }) {
               </div>
               {isParticipantsExpanded && (
                 <div className="participants-table">
-                  <div className="participants-section__count">Всего: {event.participants?.length || event.participants_planned || 0}</div>
+                  <div className="participants-section__count">Всего: {participants.length}</div>
+                  {participants.length === 0 ? (
+                    <div className="participants-table__empty">Участники пока не привязаны.</div>
+                  ) : (
+                    participants.map((participant) => {
+                      const student = studentsById[participant.student_id];
+                      return (
+                        <div className="participant-card" key={participant.participation_id}>
+                          <div className="participant-card__main">
+                            <input className="participant-card__fio" value={getStudentName(student) || `ID ${participant.student_id}`} readOnly />
+                            <input className="participant-card__role" value={participant.role_name} readOnly />
+                            <input className="participant-card__phone" value={student?.phone || ''} readOnly />
+                          </div>
+                          {participant.notes ? (
+                            <div className="participant-card__time">
+                              <span className="participant-card__duration-text">{participant.notes}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>

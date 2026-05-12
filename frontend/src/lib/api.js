@@ -150,6 +150,36 @@ export async function deleteEvent(eventId) {
   });
 }
 
+export async function listEventParticipants(eventId) {
+  return request(`/events/${eventId}/participants`);
+}
+
+export async function createEventParticipant(eventId, payload) {
+  return request(`/events/${eventId}/participants`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
+export async function updateEventParticipant(eventId, participationId, payload) {
+  return request(`/events/${eventId}/participants/${participationId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
+export async function deleteEventParticipant(eventId, participationId) {
+  return request(`/events/${eventId}/participants/${participationId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listEventTypes({ skip = 0, limit = 50, isActive = null } = {}) {
   const params = new URLSearchParams({
     skip: String(skip),

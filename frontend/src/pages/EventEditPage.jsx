@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { getEvent, updateEvent, listEventTypes, createEventType } from '../lib/api.js';
+import {
+  createEventParticipant,
+  createEventType,
+  deleteEventParticipant,
+  getEvent,
+  listEventParticipants,
+  listEventTypes,
+  listStudents,
+  updateEvent,
+} from '../lib/api.js';
 import './EventCreatePage.css';
 
 const eventLevelOptions = [
@@ -20,6 +29,10 @@ const roleOptions = [
 
 function hasValue(value) {
   return value !== null && value !== undefined && value !== '';
+}
+
+function getStudentName(student) {
+  return [student?.last_name, student?.first_name, student?.middle_name].filter(Boolean).join(' ');
 }
 
 function getValidationMessages(formData) {
@@ -152,6 +165,8 @@ export function EventEditPage() {
   const [eventId, setEventId] = useState(null);
   const [eventTypesCache, setEventTypesCache] = useState([]);
   const [eventData, setEventData] = useState(null); // ✅ Храним сырые данные мероприятия
+  const [studentsCache, setStudentsCache] = useState([]);
+  const [newParticipant, setNewParticipant] = useState({ student_id: '', role_name: '' });
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -165,6 +180,20 @@ export function EventEditPage() {
       setError('Не указан ID мероприятия');
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStudents() {
+      try {
+        const data = await listStudents({ limit: 200, isActive: true });
+        if (isMounted) setStudentsCache(data);
+      } catch (err) {
+        console.error('Не удалось загрузить список студентов:', err);
+      }
+    }
+    loadStudents();
+    return () => { isMounted = false; };
   }, []);
 
   // ✅ Загрузка типов мероприятий
@@ -193,6 +222,9 @@ export function EventEditPage() {
         
         const formatTimeForInput = (isoString) => {
           if (!isoString) return '';
+          if (typeof isoString === 'string' && /^\d{2}:\d{2}/.test(isoString)) {
+            return isoString.slice(0, 5);
+          }
           const date = new Date(isoString);
           return date.toTimeString().slice(0, 5);
         };
@@ -230,6 +262,37 @@ export function EventEditPage() {
 
     loadEvent();
   }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId) return;
+
+    let isMounted = true;
+    async function loadParticipants() {
+      try {
+        const data = await listEventParticipants(eventId);
+        if (!isMounted) return;
+
+        setParticipants(
+          data.map((participant) => {
+            const student = studentsCache.find((item) => item.student_id === participant.student_id);
+            return {
+              ...participant,
+              id: participant.participation_id,
+              fio: getStudentName(student) || `ID ${participant.student_id}`,
+              role: participant.role_name,
+              phone: student?.phone || '',
+              timeSlots: [],
+            };
+          })
+        );
+      } catch (err) {
+        console.error('Не удалось загрузить участников мероприятия:', err);
+      }
+    }
+
+    loadParticipants();
+    return () => { isMounted = false; };
+  }, [eventId, studentsCache]);
 
   // ✅ Заполняем тип мероприятия после загрузки и мероприятия, и типов
   useEffect(() => {
@@ -296,10 +359,10 @@ export function EventEditPage() {
       };
 
       if (formData.start_date && formData.start_time) {
-        payload.start_time = `${formData.start_date}T${formData.start_time}:00`;
+        payload.start_time = `${formData.start_time}:00`;
       }
       if (formData.end_date && formData.end_time) {
-        payload.end_time = `${formData.end_date}T${formData.end_time}:00`;
+        payload.end_time = `${formData.end_time}:00`;
       }
 
       await updateEvent(eventId, payload);
@@ -314,6 +377,46 @@ export function EventEditPage() {
 
   const validationMessages = getValidationMessages(formData);
   const isValid = validationMessages.length === 0;
+
+  async function handleAddParticipant() {
+    if (!eventId || !newParticipant.student_id || !newParticipant.role_name) return;
+
+    try {
+      const created = await createEventParticipant(eventId, {
+        student_id: Number(newParticipant.student_id),
+        role_name: newParticipant.role_name,
+        participation_status: 'planned',
+        notes: null,
+      });
+      const student = studentsCache.find((item) => item.student_id === created.student_id);
+      setParticipants((prev) => [
+        ...prev,
+        {
+          ...created,
+          id: created.participation_id,
+          fio: getStudentName(student) || `ID ${created.student_id}`,
+          role: created.role_name,
+          phone: student?.phone || '',
+          timeSlots: [],
+        },
+      ]);
+      setNewParticipant({ student_id: '', role_name: '' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось добавить участника.');
+    }
+  }
+
+  async function handleRemoveParticipant(index) {
+    const participant = participants[index];
+    if (!eventId || !participant?.participation_id) return;
+
+    try {
+      await deleteEventParticipant(eventId, participant.participation_id);
+      setParticipants((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить участника.');
+    }
+  }
 
   if (loading) {
     return (
@@ -390,8 +493,42 @@ export function EventEditPage() {
           {isParticipantsExpanded && (
             <div className="participants-table">
               <div className="participants-section__count">Всего: {participants.length}</div>
+              <div className="participant-card">
+                <div className="participant-card__main">
+                  <select
+                    className="participant-card__fio"
+                    value={newParticipant.student_id}
+                    onChange={(event) => setNewParticipant((prev) => ({ ...prev, student_id: event.target.value }))}
+                  >
+                    <option value="">Выберите студента</option>
+                    {studentsCache.map((student) => (
+                      <option key={student.student_id} value={student.student_id}>
+                        {getStudentName(student)}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="participant-card__role"
+                    value={newParticipant.role_name}
+                    onChange={(event) => setNewParticipant((prev) => ({ ...prev, role_name: event.target.value }))}
+                  >
+                    <option value="">Роль</option>
+                    {roleOptions.map((role) => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="participant-card__add-time"
+                    type="button"
+                    onClick={handleAddParticipant}
+                    disabled={!newParticipant.student_id || !newParticipant.role_name}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
               {participants.map((p, idx) => (
-                <ParticipantCard key={p.id} participant={p} index={idx} onRemove={() => {}} onAddTimeSlot={() => {}} onUpdateTimeSlot={() => {}} onRemoveTimeSlot={() => {}} />
+                <ParticipantCard key={p.participation_id || p.id} participant={p} index={idx} onRemove={handleRemoveParticipant} onAddTimeSlot={() => {}} onUpdateTimeSlot={() => {}} onRemoveTimeSlot={() => {}} />
               ))}
             </div>
           )}

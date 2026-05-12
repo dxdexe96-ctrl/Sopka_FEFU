@@ -19,6 +19,7 @@ class EventCreate(BaseModel):
 
     participants_planned: int | None = Field(None, ge=0)
     duration_hours: Decimal | None = Field(None, ge=0)
+    event_comment: str | None = None
 
 
 class EventUpdate(BaseModel):
@@ -34,6 +35,7 @@ class EventUpdate(BaseModel):
 
     participants_planned: int | None = Field(None, ge=0)
     duration_hours: Decimal | None = Field(None, ge=0)
+    event_comment: str | None = None
 
 
 class EventRead(BaseModel):
@@ -52,6 +54,7 @@ class EventRead(BaseModel):
 
     participants_planned: int | None
     duration_hours: Decimal | None
+    event_comment: str | None
 
     created_at: datetime
 
