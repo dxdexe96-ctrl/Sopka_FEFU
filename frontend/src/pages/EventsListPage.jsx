@@ -1,25 +1,50 @@
 import { useState, useEffect } from 'react';
-import { listEvents, deleteEvent as deleteEventApi } from '../lib/api.js'; // ← Добавлено
+import { listEvents, deleteEvent as deleteEventApi, listEventParticipants } from '../lib/api.js';
 import './EventsListPage.css';
-import { EventViewModal } from './EventViewModal'; 
+import { EventViewModal } from './EventViewModal';
 
 export function EventsListPage() {
-  const [events, setEvents] = useState([]); // ← Было: массив с моковыми данными
+  const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadEvents() {
+    async function loadEventsWithParticipants() {
       try {
-        const data = await listEvents({ limit: 200 });
-        setEvents(data);
+        setLoading(true);
+        // Загружаем список мероприятий
+        const eventsData = await listEvents({ limit: 200 });
+
+        // Для каждого мероприятия загружаем количество участников
+        const eventsWithCounts = await Promise.all(
+          eventsData.map(async (event) => {
+            try {
+              const participants = await listEventParticipants(event.event_id);
+              return {
+                ...event,
+                participants_count: participants.length
+              };
+            } catch (err) {
+              console.error(`Не удалось загрузить участников для мероприятия ${event.event_id}:`, err);
+              return {
+                ...event,
+                participants_count: 0
+              };
+            }
+          })
+        );
+
+        setEvents(eventsWithCounts);
       } catch (err) {
         console.error('Не удалось загрузить мероприятия:', err);
+      } finally {
+        setLoading(false);
       }
     }
-    loadEvents();
+
+    loadEventsWithParticipants();
   }, []);
 
-  // ← Обновлено: удаление через API
   const deleteEvent = async (id, e) => {
     e.stopPropagation();
     if (window.confirm("Вы уверены, что хотите удалить это мероприятие?")) {
@@ -37,6 +62,14 @@ export function EventsListPage() {
     window.location.hash = `edit-event?id=${id}`;
   };
 
+  if (loading) {
+    return (
+      <div className="events-list-page">
+        <div className="loading-state">Загрузка мероприятий...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="events-list-page">
       <div className="events-list-header">
@@ -49,7 +82,7 @@ export function EventsListPage() {
         <div className="header-main-row">
           <h1 className="events-list-title">Мероприятия</h1>
           <div className="events-list-controls">
-            <button 
+            <button
               className="add-event-button"
               onClick={() => window.location.hash = 'create-event'}
             >
@@ -63,31 +96,30 @@ export function EventsListPage() {
       <div className="events-grid">
         {events.length > 0 ? (
           events.map((event) => (
-            <div 
-              key={event.event_id} // ← Было: event.id
-              className="event-card" 
+            <div
+              key={event.event_id}
+              className="event-card"
               onClick={() => setSelectedEvent(event)}
               style={{ cursor: 'pointer' }}
             >
               <div className="event-actions">
-                <button 
-                  className="action-btn edit-btn" 
+                <button
+                  className="action-btn edit-btn"
                   title="Отредактировать"
-                  onClick={(e) => goToEdit(event.event_id, e)} // ← Было: event.id
+                  onClick={(e) => goToEdit(event.event_id, e)}
                 >
                   ✎
                 </button>
-                <button 
-                  className="action-btn delete-btn" 
+                <button
+                  className="action-btn delete-btn"
                   title="Удалить мероприятие"
-                  onClick={(e) => deleteEvent(event.event_id, e)} // ← Было: event.id
+                  onClick={(e) => deleteEvent(event.event_id, e)}
                 >
                   ×
                 </button>
               </div>
 
               <div className="event-card-header">
-                {/* ← Используем поля из API */}
                 <span className="event-card-name">{event.event_name}</span>
               </div>
               <div className="event-card-body">
@@ -97,7 +129,7 @@ export function EventsListPage() {
                   </span>
                   <div className="event-card-participants">
                     <span className="participants-label">Кол. Участников</span>
-                    <div className="participants-badge">{event.participants_planned || 0}</div>
+                    <div className="participants-badge">{event.participants_count || 0}</div>
                   </div>
                 </div>
               </div>
@@ -109,11 +141,12 @@ export function EventsListPage() {
       </div>
 
       {selectedEvent && (
-        <EventViewModal 
-          event={selectedEvent} 
-          onClose={() => setSelectedEvent(null)} 
+        <EventViewModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
         />
       )}
     </div>
   );
 }
+

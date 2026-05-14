@@ -283,8 +283,8 @@ function ParticipantCard({ participant, index, studentsList, onRemove, onAddTime
             <option value="">Роль</option>
             {roleOptions.map(role => (<option key={role} value={role}>{role}</option>))}
           </select>
-          <input 
-            type="text" 
+          <input
+            type="text"
             className="participant-card__phone"
             value={participant.phone ? formatPhone(participant.phone) : ''}
             onChange={(e) => {
@@ -355,15 +355,67 @@ export function EventCreatePage() {
 
   useEffect(() => { setFormData(prev => ({ ...prev, participants_planned: participants.length.toString() })); }, [participants]);
 
+  // ✅ ИСПРАВЛЕННЫЙ расчет длительности: дни × часы в день
   useEffect(() => {
-    const { start_date, start_time, end_date, end_time } = formData;
-    if (start_date && start_time && end_date && end_time) {
-      const start = new Date(`${start_date}T${start_time}`);
-      const end = new Date(`${end_date}T${end_time}`);
-      if (!isNaN(start) && !isNaN(end) && end > start) {
-        const hours = (end - start) / (1000 * 60 * 60);
-        setFormData(prev => ({ ...prev, duration_hours: hours.toFixed(1).replace(/\.0$/, '') }));
+    function calculateDurationInHours() {
+      // Проверяем наличие дат
+      if (!formData.start_date || !formData.end_date) {
+        return;
       }
+
+      // Расчет количества дней между датами (включая оба дня)
+      const startDateOnly = new Date(formData.start_date);
+      const endDateOnly = new Date(formData.end_date);
+      startDateOnly.setHours(0, 0, 0, 0);
+      endDateOnly.setHours(0, 0, 0, 0);
+
+      // Количество дней + 1 (включая последний день)
+      const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Расчет количества часов в день
+      let startHours = 0;
+      let endHours = 0;
+
+      if (formData.start_time) {
+        const [hours, minutes] = formData.start_time.split(':').map(Number);
+        startHours = hours + minutes / 60;
+      }
+
+      if (formData.end_time) {
+        const [hours, minutes] = formData.end_time.split(':').map(Number);
+        endHours = hours + minutes / 60;
+      } else if (formData.start_time) {
+        // Если нет времени окончания, считаем что мероприятие длится до 24:00
+        endHours = 24;
+      } else {
+        // Если нет времени вообще, используем 8 часов по умолчанию
+        return daysDiff * 8;
+      }
+
+      // Часы в день
+      const hoursPerDay = endHours - startHours;
+
+      // Если часы в день отрицательные или 0, используем 8 часов по умолчанию
+      if (hoursPerDay <= 0) {
+        return daysDiff * 8;
+      }
+
+      // Общее количество часов = дни × часы в день
+      const totalHours = daysDiff * hoursPerDay;
+
+      // Округляем до 0.5 часов
+      const roundedHours = Math.round(totalHours * 2) / 2;
+
+      return roundedHours;
+    }
+
+    const calculatedDuration = calculateDurationInHours();
+
+    if (calculatedDuration !== undefined && calculatedDuration !== null && !isNaN(calculatedDuration)) {
+      setFormData(prev => ({
+        ...prev,
+        duration_hours: calculatedDuration.toString()
+      }));
     }
   }, [formData.start_date, formData.start_time, formData.end_date, formData.end_time]);
 
@@ -405,18 +457,18 @@ export function EventCreatePage() {
 
     setIsSubmitting(true);
     setStatus({ type: 'idle', messages: [] });
-    
+
     try {
       let eventTypeId = null;
       const eventTypeName = formData.event_type?.trim();
-      
+
       // ✅ Если указан тип мероприятия, проверяем/создаем его
       if (eventTypeName) {
         // Ищем существующий тип
         const existingType = eventTypesCache.find(
           et => et.event_type_name.toLowerCase() === eventTypeName.toLowerCase()
         );
-        
+
         if (existingType) {
           // Тип существует, используем его ID
           eventTypeId = existingType.event_type_id;
@@ -426,10 +478,10 @@ export function EventCreatePage() {
             const newType = await createEventType({
               event_type_name: eventTypeName,
               description: null,
-              is_active: true, // По умолчанию активен
+              is_active: true,
             });
             eventTypeId = newType.event_type_id;
-            
+
             // Добавляем в кэш
             setEventTypesCache(prev => [...prev, newType]);
           } catch (err) {
@@ -449,10 +501,10 @@ export function EventCreatePage() {
         duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
         event_comment: formData.event_comment?.trim() || null,
       };
-      
+
       if (formData.start_time) payload.start_time = `${formData.start_time}:00`;
       if (formData.end_time) payload.end_time = `${formData.end_time}:00`;
-      
+
       const createdEvent = await createEvent(payload);
       const participantPayloads = participants
         .filter((participant) => participant.student_id && participant.role)
@@ -495,7 +547,7 @@ export function EventCreatePage() {
           <div className="events-form__grid">
             <FormField label="Название" name="event_name" value={formData.event_name} onChange={handleChange} required placeholder="Название" />
             <FormField label="Уровень" name="event_level" value={formData.event_level} onChange={handleChange} required as="select" options={eventLevelOptions} />
-            
+
             {/* ✅ Автодополнение для типа мероприятия */}
             <div className="events-form__field">
               <label className="events-form__label" htmlFor="event_type">Тип мероприятия</label>
@@ -506,14 +558,14 @@ export function EventCreatePage() {
                 onSelectEventType={() => {}}
               />
             </div>
-            
+
             <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
             <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
             <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" />
             <FormField label="Количество участников" name="participants_planned" value={formData.participants_planned} onChange={handleChange} type="number" placeholder="0" disabled />
-            <FormField label="Длительность" name="duration_hours" value={formData.duration_hours} onChange={handleChange} type="number" step="0.5" placeholder="0 ч." disabled />
+            <FormField label="Общее время мероприятия в часах" name="duration_hours" value={formData.duration_hours} onChange={handleChange} type="number" step="0.5" placeholder="0 ч." disabled />
             <FormField label="Комментарий" name="event_comment" value={formData.event_comment} onChange={handleChange} as="textarea" placeholder="Комментарий" />
           </div>
         </div>

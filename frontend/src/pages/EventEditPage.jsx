@@ -173,7 +173,7 @@ export function EventEditPage() {
   const [formData, setFormData] = useState({
     event_name: '', event_level: '', event_type: '', organizer_name: '',
     start_date: '', end_date: '', start_time: '', end_time: '',
-    participants_planned: '', duration_hours: '', event_comment: '',
+    duration_hours: '', event_comment: '',
   });
   const [participants, setParticipants] = useState([]);
   const [isParticipantsExpanded, setIsParticipantsExpanded] = useState(true);
@@ -182,24 +182,34 @@ export function EventEditPage() {
   const [error, setError] = useState('');
   const [eventId, setEventId] = useState(null);
   const [eventTypesCache, setEventTypesCache] = useState([]);
-  const [eventData, setEventData] = useState(null); // ✅ Храним сырые данные мероприятия
+  const [eventData, setEventData] = useState(null);
   const [studentsCache, setStudentsCache] = useState([]);
   const [newParticipant, setNewParticipant] = useState({ student_id: '', role_name: '' });
 
+  // Получаем ID из URL
   useEffect(() => {
-    const hash = window.location.hash;
-    const queryString = hash.includes('?') ? hash.split('?')[1] : window.location.search;
-    const params = new URLSearchParams(queryString);
-    const id = params.get('id');
-    
-    if (id) {
-      setEventId(Number(id));
-    } else {
-      setError('Не указан ID мероприятия');
+    try {
+      const hash = window.location.hash;
+      const queryString = hash.includes('?') ? hash.split('?')[1] : window.location.search;
+      const params = new URLSearchParams(queryString);
+      const id = params.get('id');
+
+      console.log('EventEditPage: ID из URL:', id);
+
+      if (id) {
+        setEventId(Number(id));
+      } else {
+        setError('Не указан ID мероприятия');
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('Ошибка при получении ID:', err);
+      setError('Ошибка при получении ID мероприятия');
       setLoading(false);
     }
   }, []);
 
+  // Загрузка студентов
   useEffect(() => {
     let isMounted = true;
     async function loadStudents() {
@@ -214,20 +224,22 @@ export function EventEditPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // ✅ Загрузка типов мероприятий
+  // Загрузка типов мероприятий
   useEffect(() => {
     let isMounted = true;
     async function loadEventTypes() {
       try {
         const data = await listEventTypes({ limit: 200, isActive: true });
         if (isMounted) setEventTypesCache(data);
-      } catch (err) { console.error('Не удалось загрузить типы мероприятий:', err); }
+      } catch (err) {
+        console.error('Не удалось загрузить типы мероприятий:', err);
+      }
     }
     loadEventTypes();
     return () => { isMounted = false; };
   }, []);
 
-  // ✅ Загрузка данных мероприятия
+  // Загрузка данных мероприятия
   useEffect(() => {
     if (!eventId) return;
 
@@ -235,9 +247,12 @@ export function EventEditPage() {
       try {
         setLoading(true);
         setError('');
+        console.log('Загрузка мероприятия с ID:', eventId);
+
         const event = await getEvent(eventId);
-        setEventData(event); // Сохраняем сырые данные
-        
+        console.log('Получены данные мероприятия:', event);
+        setEventData(event);
+
         const formatTimeForInput = (isoString) => {
           if (!isoString) return '';
           if (typeof isoString === 'string' && /^\d{2}:\d{2}/.test(isoString)) {
@@ -256,13 +271,12 @@ export function EventEditPage() {
         setFormData({
           event_name: event.event_name || '',
           event_level: event.event_level || '',
-          event_type: '', // Пока пусто, заполним после загрузки типов
+          event_type: '',
           organizer_name: event.organizer_name || '',
           start_date: formatDateForInput(event.start_date),
           end_date: formatDateForInput(event.end_date),
           start_time: formatTimeForInput(event.start_time),
           end_time: formatTimeForInput(event.end_time),
-          participants_planned: event.participants_planned || '',
           duration_hours: event.duration_hours || '',
           event_comment: event.event_comment || '',
         });
@@ -271,8 +285,8 @@ export function EventEditPage() {
           setParticipants(event.participants);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить данные мероприятия');
         console.error('Error loading event:', err);
+        setError(err instanceof Error ? err.message : 'Не удалось загрузить данные мероприятия');
       } finally {
         setLoading(false);
       }
@@ -281,14 +295,18 @@ export function EventEditPage() {
     loadEvent();
   }, [eventId]);
 
+  // Загрузка участников
   useEffect(() => {
     if (!eventId) return;
 
     let isMounted = true;
     async function loadParticipants() {
       try {
+        console.log('Загрузка участников для мероприятия:', eventId);
         const data = await listEventParticipants(eventId);
         if (!isMounted) return;
+
+        console.log('Получены участники:', data);
 
         setParticipants(
           data.map((participant) => {
@@ -308,11 +326,14 @@ export function EventEditPage() {
       }
     }
 
-    loadParticipants();
+    // Ждем загрузки studentsCache
+    if (studentsCache.length > 0 || participants.length === 0) {
+      loadParticipants();
+    }
     return () => { isMounted = false; };
   }, [eventId, studentsCache]);
 
-  // ✅ Заполняем тип мероприятия после загрузки и мероприятия, и типов
+  // Заполняем тип мероприятия
   useEffect(() => {
     if (eventData && eventTypesCache.length > 0 && eventData.event_type_id) {
       const type = eventTypesCache.find(et => et.event_type_id === eventData.event_type_id);
@@ -322,6 +343,59 @@ export function EventEditPage() {
     }
   }, [eventData, eventTypesCache]);
 
+  // Расчет длительности
+  useEffect(() => {
+    function calculateDurationInHours() {
+      if (!formData.start_date || !formData.end_date) {
+        return;
+      }
+
+      const startDateOnly = new Date(formData.start_date);
+      const endDateOnly = new Date(formData.end_date);
+      startDateOnly.setHours(0, 0, 0, 0);
+      endDateOnly.setHours(0, 0, 0, 0);
+
+      const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
+
+      let startHours = 0;
+      let endHours = 0;
+
+      if (formData.start_time) {
+        const [hours, minutes] = formData.start_time.split(':').map(Number);
+        startHours = hours + minutes / 60;
+      }
+
+      if (formData.end_time) {
+        const [hours, minutes] = formData.end_time.split(':').map(Number);
+        endHours = hours + minutes / 60;
+      } else if (formData.start_time) {
+        endHours = 24;
+      } else {
+        return daysDiff * 8;
+      }
+
+      const hoursPerDay = endHours - startHours;
+
+      if (hoursPerDay <= 0) {
+        return daysDiff * 8;
+      }
+
+      const totalHours = daysDiff * hoursPerDay;
+      const roundedHours = Math.round(totalHours * 2) / 2;
+
+      return roundedHours;
+    }
+
+    const calculatedDuration = calculateDurationInHours();
+
+    if (calculatedDuration !== undefined && calculatedDuration !== null && !isNaN(calculatedDuration)) {
+      setFormData(prev => ({
+        ...prev,
+        duration_hours: calculatedDuration.toString()
+      }));
+    }
+  }, [formData.start_date, formData.start_time, formData.end_date, formData.end_time]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -329,12 +403,12 @@ export function EventEditPage() {
 
   async function resolveEventTypeId(typeName) {
     if (!typeName) return null;
-    
+
     const existing = eventTypesCache.find(
       et => et.event_type_name.toLowerCase() === typeName.toLowerCase()
     );
     if (existing) return existing.event_type_id;
-    
+
     try {
       const newType = await createEventType({
         event_type_name: typeName,
@@ -371,7 +445,7 @@ export function EventEditPage() {
         organizer_name: formData.organizer_name?.trim() || null,
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
-        participants_planned: formData.participants_planned ? parseInt(formData.participants_planned) : null,
+        participants_planned: participants.length,
         duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
         event_comment: formData.event_comment?.trim() || null,
       };
@@ -383,11 +457,12 @@ export function EventEditPage() {
         payload.end_time = `${formData.end_time}:00`;
       }
 
+      console.log('Отправка payload:', payload);
       await updateEvent(eventId, payload);
       window.location.hash = 'events-list';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
       console.error('Error updating event:', err);
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
     } finally {
       setIsSubmitting(false);
     }
@@ -436,10 +511,26 @@ export function EventEditPage() {
     }
   }
 
+  // Отладочный вывод
+  console.log('EventEditPage rendering, loading:', loading, 'error:', error, 'eventId:', eventId);
+
   if (loading) {
     return (
       <div className="event-create-page">
-        <div className="loading-state">Загрузка данных...</div>
+        <div className="loading-state">Загрузка данных мероприятия...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="event-create-page">
+        <div className="error-message" style={{ margin: '20px' }}>
+          <p>Ошибка: {error}</p>
+          <button onClick={() => { window.location.hash = 'events-list'; }} className="retry-button">
+            Вернуться к списку
+          </button>
+        </div>
       </div>
     );
   }
@@ -448,8 +539,10 @@ export function EventEditPage() {
     return (
       <div className="event-create-page">
         <div className="error-message" style={{ margin: '20px' }}>
-          {error}
-          <button onClick={() => { window.location.hash = 'events-list'; }} className="retry-button">К списку</button>
+          <p>ID мероприятия не найден в URL</p>
+          <button onClick={() => { window.location.hash = 'events-list'; }} className="retry-button">
+            Вернуться к списку
+          </button>
         </div>
       </div>
     );
@@ -476,7 +569,7 @@ export function EventEditPage() {
           <div className="events-form__grid">
             <FormField label="Название" name="event_name" value={formData.event_name} onChange={handleChange} required />
             <FormField label="Уровень" name="event_level" value={formData.event_level} onChange={handleChange} as="select" options={eventLevelOptions} required />
-            
+
             <div className="events-form__field">
               <label className="events-form__label" htmlFor="event_type">Тип мероприятия</label>
               <EventTypeInput
@@ -486,14 +579,14 @@ export function EventEditPage() {
                 onSelectEventType={() => {}}
               />
             </div>
-            
+
             <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} placeholder="ФИО" />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
             <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
             <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" />
             <FormField label="Количество участников" name="participants_planned" value={participants.length} disabled />
-            <FormField label="Длительность" name="duration_hours" value={formData.duration_hours} onChange={handleChange} disabled placeholder="0 ч." />
+            <FormField label="Длительность (общее время мероприятия, ч)" name="duration_hours" value={formData.duration_hours} onChange={handleChange} disabled placeholder="0 ч." />
             <FormField label="Комментарий" name="event_comment" value={formData.event_comment} onChange={handleChange} as="textarea" />
           </div>
         </div>

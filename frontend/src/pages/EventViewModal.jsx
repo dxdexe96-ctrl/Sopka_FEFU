@@ -129,10 +129,11 @@ export function EventViewModal({ event, onClose }) {
                 </div>
                 <div className="events-form__field">
                   <label className="events-form__label">Количество участников</label>
-                  <input className="events-form__control" value={event.participants_planned || 0} readOnly />
+                  {/* ✅ ИСПРАВЛЕНО: показываем реальное количество участников */}
+                  <input className="events-form__control" value={participants.length} readOnly />
                 </div>
                 <div className="events-form__field">
-                  <label className="events-form__label">Длительность</label>
+                  <label className="events-form__label">Общее время мероприятия в часах</label>
                   <input className="events-form__control" value={event.duration_hours || '—'} readOnly />
                 </div>
                 <div className="events-form__field" style={{ gridColumn: '1 / -1' }}>
