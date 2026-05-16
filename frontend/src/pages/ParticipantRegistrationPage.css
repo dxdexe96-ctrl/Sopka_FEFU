@@ -305,3 +305,15 @@
     width: 100%;
   }
 }
+
+.registration-page__personal-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.registration-page__column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { createEvent, createEventParticipant, listStudents, listEventTypes, createEventType } from '../lib/api.js';
 import './EventCreatePage.css';
 
+
+
 const eventLevelOptions = [
   'Всероссийский',
   'Региональный',
@@ -84,7 +86,7 @@ function buildParticipantNotes(participant) {
   return slots.length > 0 ? `Интервалы участия: ${slots.join('; ')}` : null;
 }
 
-function FormField({ label, name, value, onChange, required = false, type = 'text', placeholder = '', as = 'input', options = [], disabled = false }) {
+function FormField({ label, name, value, onChange, required = false, type = 'text', placeholder = '', as = 'input', options = [], disabled = false, step,}) {
   const commonProps = { className: 'events-form__control', id: name, name, value, onChange, required, placeholder, disabled };
   return (
     <div className="events-form__field">
@@ -99,7 +101,7 @@ function FormField({ label, name, value, onChange, required = false, type = 'tex
       ) : as === 'textarea' ? (
         <textarea {...commonProps} rows="3" />
       ) : (
-        <input {...commonProps} type={type} />
+        <input {...commonProps} type={type} step={step}/>
       )}
     </div>
   );
@@ -279,10 +281,26 @@ function ParticipantCard({ participant, index, studentsList, onRemove, onAddTime
               });
             }}
           />
-          <select className="participant-card__role" value={participant.role} onChange={(e) => onUpdateParticipant(index, { ...participant, role: e.target.value })}>
-            <option value="">Роль</option>
-            {roleOptions.map(role => (<option key={role} value={role}>{role}</option>))}
-          </select>
+         <select
+          className="participant-card__role"
+          value={participant.role}
+          onChange={(e) =>
+            onUpdateParticipant(index, {
+              ...participant,
+              role: e.target.value
+            })
+          }
+        >
+          <option value="" disabled hidden>
+            Выберите роль
+          </option>
+
+          {roleOptions.map(role => (
+            <option key={role} value={role}>
+              {role}
+            </option>
+          ))}
+        </select>
           <input
             type="text"
             className="participant-card__phone"
@@ -559,11 +577,11 @@ export function EventCreatePage() {
               />
             </div>
 
-            <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} />
+            <FormField label="Организация" name="organizer_name" value={formData.organizer_name} onChange={handleChange} />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
-            <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />
+            <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" step="1800" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
-            <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" />
+            <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" step="1800" />
             <FormField label="Количество участников" name="participants_planned" value={formData.participants_planned} onChange={handleChange} type="number" placeholder="0" disabled />
             <FormField label="Общее время мероприятия в часах" name="duration_hours" value={formData.duration_hours} onChange={handleChange} type="number" step="0.5" placeholder="0 ч." disabled />
             <FormField label="Комментарий" name="event_comment" value={formData.event_comment} onChange={handleChange} as="textarea" placeholder="Комментарий" />
