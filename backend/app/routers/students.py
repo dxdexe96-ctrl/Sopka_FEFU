@@ -7,10 +7,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import commit_session
 from app.database import get_session
 from app.models.student import Student
-from app.schemas.student import StudentCreate, StudentRead, StudentUpdate
+from app.schemas.student import (
+    StudentCreate,
+    StudentFindOrCreate,
+    StudentFindOrCreateResponse,
+    StudentRead,
+    StudentUpdate,
+)
 from app.services.excel_import import ExcelImportService, ImportMode
+from app.services.student_lookup import find_or_create_student
 
 router = APIRouter(prefix="/students", tags=["students"])
+
+
+@router.post("/find-or-create", response_model=StudentFindOrCreateResponse, status_code=200)
+async def find_or_create_student_endpoint(
+    body: StudentFindOrCreate,
+    session: AsyncSession = Depends(get_session),
+) -> StudentFindOrCreateResponse:
+    student, created = await find_or_create_student(
+        session,
+        last_name=body.last_name,
+        first_name=body.first_name,
+        middle_name=body.middle_name,
+        phone=body.phone,
+    )
+    await commit_session(session)
+    await session.refresh(student)
+    return StudentFindOrCreateResponse(student=student, created=created)
 
 
 @router.post("", response_model=StudentRead, status_code=201)
