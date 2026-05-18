@@ -7,18 +7,45 @@ import { ParticipantRegistrationPage } from './pages/ParticipantRegistrationPage
 import { ParticipantsDatabasePage } from './pages/ParticipantsDatabasePage.jsx';
 import { EventCreatePage } from './pages/EventCreatePage.jsx';
 import { EventsListPage } from './pages/EventsListPage.jsx';
-import { EventEditPage } from './pages/EventEditPage.jsx'; // 1. Импортируем новую страницу
+import { EventEditPage } from './pages/EventEditPage.jsx';
 import './styles/app.css';
 
+function parseHash() {
+  const raw = (window.location.hash || '#').replace(/^#/, '');
+  const pathPart = raw.split('?')[0] || 'home';
+  const queryPart = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  return { path: pathPart, params: new URLSearchParams(queryPart) };
+}
+
 function getRouteFromHash() {
-  // Убираем '#' и всё, что идет после знака '?', для чистого сравнения маршрута
-  const route = window.location.hash.replace('#', '').split('?')[0];
-  return route || 'home';
+  return parseHash().path;
+}
+
+/** ID участника для страницы редактирования (не путать с edit-event). */
+function getParticipantEditId() {
+  const { path, params } = parseHash();
+  if (path === 'edit-event' || path.startsWith('edit-event')) {
+    return null;
+  }
+  if (path.startsWith('edit-participant/')) {
+    const id = path.slice('edit-participant/'.length).split('/')[0];
+    return id || null;
+  }
+  if (path === 'edit-participant') {
+    return params.get('id') || null;
+  }
+  if (path.startsWith('edit/')) {
+    const id = path.slice('edit/'.length).split('/')[0];
+    return id || null;
+  }
+  if (path === 'edit') {
+    return params.get('id') || null;
+  }
+  return null;
 }
 
 export default function App() {
   const [route, setRoute] = useState(getRouteFromHash);
-  const [routeName, routeParam] = route.split('/');
 
   useEffect(() => {
     function handleHashChange() {
@@ -29,43 +56,41 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const isEditParticipantPage = routeName === 'edit' && routeParam;
-  
-  // 2. Проверка, является ли страница редактированием мероприятия
+  const participantEditId = getParticipantEditId();
+  const isEditParticipantPage = Boolean(participantEditId);
   const isEditEventPage = route === 'edit-event';
 
-  const isWidePage = 
-    route === 'create' || 
-    route === 'database' || 
-    route === 'import' || 
-    route === 'create-event' || 
-    route === 'events-list' || 
-    isEditEventPage || // Добавили в список широких страниц
+  const isWidePage =
+    route === 'create' ||
+    route === 'database' ||
+    route === 'import' ||
+    route === 'create-event' ||
+    route === 'events-list' ||
+    isEditEventPage ||
     isEditParticipantPage;
 
   return (
     <div className="app-shell">
       <Header />
       <main className={`app-content ${isWidePage ? 'app-content--wide' : ''}`}>
-        {/* Страницы участников */}
         {route === 'create' ? <ParticipantRegistrationPage /> : null}
         {route === 'import' ? <ParticipantImportPage /> : null}
         {route === 'database' ? <ParticipantsDatabasePage /> : null}
-        {isEditParticipantPage ? <ParticipantEditPage studentId={routeParam} /> : null}
+        {isEditParticipantPage ? <ParticipantEditPage studentId={participantEditId} /> : null}
 
-        {/* Страницы мероприятий */}
         {route === 'events-list' ? <EventsListPage /> : null}
         {route === 'create-event' ? <EventCreatePage /> : null}
-        {isEditEventPage ? <EventEditPage /> : null} {/* 3. Регистрация страницы редактирования */}
+        {isEditEventPage ? <EventEditPage /> : null}
 
-        {/* Главная страница: отображается, если маршрут не совпал с вышеуказанными */}
-        {route !== 'create' && 
-         route !== 'import' && 
-         route !== 'database' && 
-         route !== 'create-event' && 
-         route !== 'events-list' && 
-         route !== 'edit-event' && // Добавили исключение для главной
-         !isEditParticipantPage ? <HomePage /> : null}
+        {route !== 'create' &&
+        route !== 'import' &&
+        route !== 'database' &&
+        route !== 'create-event' &&
+        route !== 'events-list' &&
+        route !== 'edit-event' &&
+        !isEditParticipantPage ? (
+          <HomePage />
+        ) : null}
       </main>
     </div>
   );

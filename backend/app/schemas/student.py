@@ -3,6 +3,13 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class StudentFindOrCreate(BaseModel):
+    last_name: str = Field(..., max_length=100)
+    first_name: str = Field(..., max_length=100)
+    middle_name: str | None = Field(None, max_length=100)
+    phone: int = Field(..., gt=0)
+
+
 class StudentCreate(BaseModel):
     last_name: str = Field(..., max_length=100)
     first_name: str = Field(..., max_length=100)
@@ -93,3 +100,8 @@ class StudentRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class StudentFindOrCreateResponse(BaseModel):
+    student: StudentRead
+    created: bool

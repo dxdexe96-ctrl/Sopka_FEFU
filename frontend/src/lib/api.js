@@ -45,6 +45,16 @@ export async function createStudent(payload) {
   });
 }
 
+export async function findOrCreateStudent(payload) {
+  return request('/students/find-or-create', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
 export async function getStudent(studentId) {
   return request(`/students/${studentId}`);
 }

@@ -651,3 +651,83 @@ textarea.events-form__control {
     height: 40px;
   }
 }
+
+/* Расписание мероприятия по дням */
+.event-daily-schedule {
+  margin-top: 8px;
+  padding: 16px;
+  background: #f5f9fc;
+  border-radius: 8px;
+  border: 1px solid #d0e3f0;
+}
+
+.event-daily-schedule__title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #005baa;
+}
+
+.event-schedule-hint {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  color: #555;
+  line-height: 1.4;
+}
+
+.event-daily-schedule__table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-daily-schedule__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(100px, 1fr) 12px minmax(100px, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.event-daily-schedule__date {
+  font-weight: 600;
+  color: #222;
+}
+
+.event-daily-schedule__weekday {
+  font-size: 0.8rem;
+  color: #666;
+  text-transform: capitalize;
+}
+
+.event-daily-schedule__dash {
+  text-align: center;
+  color: #888;
+}
+
+.event-daily-schedule__time {
+  min-width: 0;
+}
+
+.event-view-schedule-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-view-schedule-line {
+  padding: 8px 12px;
+  background: #f5f9fc;
+  border-radius: 6px;
+  border: 1px solid #e0ecf5;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+  .event-daily-schedule__row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .event-daily-schedule__dash {
+    display: none;
+  }
+}

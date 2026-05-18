@@ -74,7 +74,7 @@ const fieldFormatters = {
 };
 
 function getDigits(value) {
-  return value.replace(/\D/g, '');
+  return String(value ?? '').replace(/\D/g, '');
 }
 
 function formatPhone(value) {
@@ -242,6 +242,14 @@ function getValidationMessages(formData) {
   return messages;
 }
 
+function phoneFromApiToMasked(phone) {
+  if (phone == null || phone === '') return '';
+  let digits = String(phone).replace(/\D/g, '');
+  if (!digits.startsWith('7')) digits = `7${digits}`;
+  digits = digits.slice(0, 11);
+  return formatPhone(digits);
+}
+
 function toFormState(student, bankDetails) {
   return {
     last_name: student.last_name || '',
@@ -250,7 +258,7 @@ function toFormState(student, bankDetails) {
     birth_date: fromApiDate(student.birth_date),
     institute: student.institute || '',
     study_group: student.study_group || '',
-    phone: student.phone || '',
+    phone: phoneFromApiToMasked(student.phone),
     corporate_email: student.corporate_email || '',
     passport_series: student.passport_series || '',
     passport_number: student.passport_number || '',
@@ -351,7 +359,7 @@ export function ParticipantEditPage({ studentId }) {
     let isMounted = true;
     setStatus({ type: 'loading', message: 'Загрузка записи участника...' });
 
-    Promise.all([getStudent(studentId), listBankDetails(studentId)])
+    Promise.all([getStudent(Number(studentId)), listBankDetails(Number(studentId))])
       .then(([student, bankRows]) => {
         if (!isMounted) {
           return;
@@ -411,7 +419,14 @@ export function ParticipantEditPage({ studentId }) {
       birth_date: toApiDate(formData.birth_date),
       study_group: formData.study_group.trim(),
       institute: formData.institute,
-      phone: sanitizeOptional(formData.phone),
+      phone: (() => {
+        const digits = getDigits(formData.phone);
+        if (!digits) return null;
+        let n = digits.startsWith('7') ? digits : `7${digits}`;
+        n = n.slice(0, 11);
+        if (n.length !== 11) return null;
+        return parseInt(n, 10);
+      })(),
       email: null,
       corporate_email: sanitizeOptional(formData.corporate_email),
       registration_address: sanitizeOptional(formData.registration_address),
@@ -436,13 +451,13 @@ export function ParticipantEditPage({ studentId }) {
     };
 
     try {
-      await updateStudent(studentId, studentPayload);
+      await updateStudent(Number(studentId), studentPayload);
 
       if (hasBankDetails) {
         if (bankDetailsId) {
           await updateBankDetails(bankDetailsId, bankPayload);
         } else {
-          const createdBankDetails = await createBankDetails(studentId, bankPayload);
+          const createdBankDetails = await createBankDetails(Number(studentId), bankPayload);
           setBankDetailsId(createdBankDetails.bank_details_id);
         }
       }

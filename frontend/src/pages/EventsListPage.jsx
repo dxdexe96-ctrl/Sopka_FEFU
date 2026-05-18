@@ -1,37 +1,90 @@
 import { useState, useEffect } from 'react';
-import { listEvents, deleteEvent as deleteEventApi, listEventParticipants } from '../lib/api.js';
+import {
+  listEvents,
+  deleteEvent as deleteEventApi,
+  listEventParticipants,
+  listEventTypes,
+} from '../lib/api.js';
+
 import './EventsListPage.css';
+import { formatEventScheduleSummary } from '../lib/eventScheduleUtils.js';
 import { EventViewModal } from './EventViewModal';
+
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('ru-RU');
+}
+
+function formatTime(timeString) {
+  if (!timeString) return '';
+  return timeString.slice(0, 5);
+}
+
+/** YYYY-MM-DD для сравнения периодов */
+function toIsoDate(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  try {
+    return new Date(value).toISOString().slice(0, 10);
+  } catch {
+    return '';
+  }
+}
+
+/** Пересечение интервала мероприятия [start..end] с фильтром [from..to] */
+function eventInDateRange(event, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return true;
+  const from = dateFrom || dateTo;
+  const to = dateTo || dateFrom;
+  const es = toIsoDate(event.start_date);
+  const ee = toIsoDate(event.end_date || event.start_date);
+  if (!es) return false;
+  return es <= to && ee >= from;
+}
 
 export function EventsListPage() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [eventTypeCatalog, setEventTypeCatalog] = useState([]);
+
+  const [search, setSearch] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    listEventTypes({ limit: 200, isActive: true })
+      .then((data) => {
+        if (mounted) setEventTypeCatalog(data || []);
+      })
+      .catch(() => {
+        if (mounted) setEventTypeCatalog([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     async function loadEventsWithParticipants() {
       try {
         setLoading(true);
-        // Загружаем список мероприятий
         const eventsData = await listEvents({ limit: 200 });
 
-        // Для каждого мероприятия загружаем количество участников
         const eventsWithCounts = await Promise.all(
           eventsData.map(async (event) => {
             try {
               const participants = await listEventParticipants(event.event_id);
-              return {
-                ...event,
-                participants_count: participants.length
-              };
+              return { ...event, participants_count: participants.length };
             } catch (err) {
               console.error(`Не удалось загрузить участников для мероприятия ${event.event_id}:`, err);
-              return {
-                ...event,
-                participants_count: 0
-              };
+              return { ...event, participants_count: 0 };
             }
-          })
+          }),
         );
 
         setEvents(eventsWithCounts);
@@ -45,14 +98,33 @@ export function EventsListPage() {
     loadEventsWithParticipants();
   }, []);
 
+  const filteredEvents = events.filter((event) => {
+    const matchesSearch = event.event_name?.toLowerCase().includes(search.toLowerCase());
+    const matchesLevel = !levelFilter || event.event_level === levelFilter;
+    const matchesType = !typeFilter || event.event_type_name === typeFilter;
+    const matchesPeriod = eventInDateRange(event, dateFrom, dateTo);
+    return matchesSearch && matchesLevel && matchesType && matchesPeriod;
+  });
+
+  const uniqueLevels = [...new Set(events.map((e) => e.event_level).filter(Boolean))];
+
+  const typeOptions = [
+    ...new Set(
+      [
+        ...eventTypeCatalog.map((t) => t.event_type_name).filter(Boolean),
+        ...events.map((e) => e.event_type_name).filter(Boolean),
+      ],
+    ),
+  ].sort((a, b) => a.localeCompare(b, 'ru'));
+
   const deleteEvent = async (id, e) => {
     e.stopPropagation();
-    if (window.confirm("Вы уверены, что хотите удалить это мероприятие?")) {
+    if (window.confirm('Вы уверены, что хотите удалить это мероприятие?')) {
       try {
         await deleteEventApi(id);
-        setEvents(events.filter(event => event.event_id !== id));
+        setEvents(events.filter((event) => event.event_id !== id));
       } catch (err) {
-        alert('Не удалось удалить: ' + (err.message || 'Ошибка'));
+        alert(`Не удалось удалить: ${err.message || 'Ошибка'}`);
       }
     }
   };
@@ -74,28 +146,81 @@ export function EventsListPage() {
     <div className="events-list-page">
       <div className="events-list-header">
         <div className="top-navigation">
-          <button className="back-home-button" onClick={() => window.location.hash = ''}>
+          <button type="button" className="back-home-button" onClick={() => { window.location.hash = ''; }}>
             ← На главную
           </button>
         </div>
 
         <div className="header-main-row">
           <h1 className="events-list-title">Мероприятия</h1>
+
           <div className="events-list-controls">
-            <button
-              className="add-event-button"
-              onClick={() => window.location.hash = 'create-event'}
-            >
+            <button type="button" className="add-event-button" onClick={() => { window.location.hash = 'create-event'; }}>
               Добавить мероприятие
             </button>
-            <div className="events-total-count">Всего: {events.length}</div>
+            <div className="events-total-count">Найдено: {filteredEvents.length}</div>
           </div>
+        </div>
+
+        <div className="events-filters">
+          <input
+            type="text"
+            placeholder="Поиск по названию..."
+            className="events-search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+
+          <select className="events-filter-select" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+            <option value="">Все уровни</option>
+            {uniqueLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+
+          <select className="events-filter-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="">Все типы</option>
+            {typeOptions.map((typeName) => (
+              <option key={typeName} value={typeName}>{typeName}</option>
+            ))}
+          </select>
+
+          <span className="events-filter-period-label">Период:</span>
+          <input
+            type="date"
+            className="events-filter-date"
+            aria-label="Дата с"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <span className="events-filter-period-dash">—</span>
+          <input
+            type="date"
+            className="events-filter-date"
+            aria-label="Дата по"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+
+          <button
+            type="button"
+            className="events-reset-filters"
+            onClick={() => {
+              setSearch('');
+              setLevelFilter('');
+              setTypeFilter('');
+              setDateFrom('');
+              setDateTo('');
+            }}
+          >
+            Сбросить
+          </button>
         </div>
       </div>
 
       <div className="events-grid">
-        {events.length > 0 ? (
-          events.map((event) => (
+        {filteredEvents.length > 0 ? (
+          filteredEvents.map((event) => (
             <div
               key={event.event_id}
               className="event-card"
@@ -103,18 +228,10 @@ export function EventsListPage() {
               style={{ cursor: 'pointer' }}
             >
               <div className="event-actions">
-                <button
-                  className="action-btn edit-btn"
-                  title="Отредактировать"
-                  onClick={(e) => goToEdit(event.event_id, e)}
-                >
+                <button type="button" className="action-btn edit-btn" title="Отредактировать" onClick={(e) => goToEdit(event.event_id, e)}>
                   ✎
                 </button>
-                <button
-                  className="action-btn delete-btn"
-                  title="Удалить мероприятие"
-                  onClick={(e) => deleteEvent(event.event_id, e)}
-                >
+                <button type="button" className="action-btn delete-btn" title="Удалить мероприятие" onClick={(e) => deleteEvent(event.event_id, e)}>
                   ×
                 </button>
               </div>
@@ -122,13 +239,40 @@ export function EventsListPage() {
               <div className="event-card-header">
                 <span className="event-card-name">{event.event_name}</span>
               </div>
+
               <div className="event-card-body">
+                <div className="event-card-meta">
+                  <span className="event-card-level" title="Уровень">{event.event_level}</span>
+                  {event.event_type_name ? (
+                    <span className="event-card-type" title="Тип мероприятия">{event.event_type_name}</span>
+                  ) : (
+                    <span className="event-card-type event-card-type--muted">Тип не указан</span>
+                  )}
+                </div>
                 <div className="event-card-info">
                   <span className="event-card-datetime">
-                    {event.start_date} - {event.end_date}, {event.start_time} - {event.end_time}
+                    {formatDate(event.start_date)}
+                    {event.end_date && (
+                      <>
+                        {' — '}
+                        {formatDate(event.end_date)}
+                      </>
+                    )}
+                    <br />
+                    {formatEventScheduleSummary(event) || (
+                      <>
+                        {formatTime(event.start_time)}
+                        {event.end_time && (
+                          <>
+                            {' - '}
+                            {formatTime(event.end_time)}
+                          </>
+                        )}
+                      </>
+                    )}
                   </span>
                   <div className="event-card-participants">
-                    <span className="participants-label">Кол. Участников</span>
+                    <span className="participants-label">Кол. участников</span>
                     <div className="participants-badge">{event.participants_count || 0}</div>
                   </div>
                 </div>
@@ -136,17 +280,13 @@ export function EventsListPage() {
             </div>
           ))
         ) : (
-          <div className="empty-state">Список мероприятий пуст</div>
+          <div className="empty-state">Ничего не найдено</div>
         )}
       </div>
 
       {selectedEvent && (
-        <EventViewModal
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-        />
+        <EventViewModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
       )}
     </div>
   );
 }
-

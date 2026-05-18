@@ -3,7 +3,27 @@ from __future__ import annotations
 from datetime import date, datetime, time
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class EventDayScheduleRow(BaseModel):
+    """Одна строка расписания: дата и время проведения в этот день."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    start_time: str | None = Field(None, max_length=16)
+    end_time: str | None = Field(None, max_length=16)
+
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def empty_to_none(cls, value: object) -> str | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return str(value)
 
 
 class EventCreate(BaseModel):
@@ -20,6 +40,7 @@ class EventCreate(BaseModel):
     participants_planned: int | None = Field(None, ge=0)
     duration_hours: Decimal | None = Field(None, ge=0)
     event_comment: str | None = None
+    event_daily_schedule: list[EventDayScheduleRow] | None = None
 
 
 class EventUpdate(BaseModel):
@@ -36,6 +57,7 @@ class EventUpdate(BaseModel):
     participants_planned: int | None = Field(None, ge=0)
     duration_hours: Decimal | None = Field(None, ge=0)
     event_comment: str | None = None
+    event_daily_schedule: list[EventDayScheduleRow] | None = None
 
 
 class EventRead(BaseModel):
@@ -55,6 +77,9 @@ class EventRead(BaseModel):
     participants_planned: int | None
     duration_hours: Decimal | None
     event_comment: str | None
+    event_daily_schedule: list[EventDayScheduleRow] | None = None
+
+    event_type_name: str | None = None
 
     created_at: datetime
 

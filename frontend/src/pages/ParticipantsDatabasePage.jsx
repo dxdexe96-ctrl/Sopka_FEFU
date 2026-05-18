@@ -175,7 +175,7 @@ function ParticipantRow({ student, isOpen, onToggle }) {
       <div className={`participants-page__details-wrapper ${isOpen ? 'participants-page__details-wrapper--open' : ''}`}>
         <div className="participants-page__details">
           <div className="participants-page__details-actions">
-            <a className="participants-page__edit-link" href={`#edit/${student.student_id}`}>
+            <a className="participants-page__edit-link" href={`#edit-participant?id=${student.student_id}`}>
               Редактировать запись
             </a>
           </div>

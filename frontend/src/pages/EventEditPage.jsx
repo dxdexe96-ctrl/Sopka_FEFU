@@ -9,6 +9,22 @@ import {
   listStudents,
   updateEvent,
 } from '../lib/api.js';
+import { ParticipantCard } from '../components/EventParticipantFields.jsx';
+import { EventDayScheduleEditor } from '../components/EventDayScheduleEditor.jsx';
+import {
+  buildParticipantNotes,
+  getParticipantValidationMessages,
+  getStudentFullName,
+  normalizePhoneDigits,
+  resolveParticipantStudentId,
+} from '../lib/participantUtils.js';
+import {
+  apiScheduleToRows,
+  enumerateEventDates,
+  mergeScheduleWithDates,
+  scheduleRowsToApi,
+  sumScheduleHours,
+} from '../lib/eventScheduleUtils.js';
 import './EventCreatePage.css';
 
 const eventLevelOptions = [
@@ -19,20 +35,8 @@ const eventLevelOptions = [
   'Институтский',
 ];
 
-const roleOptions = [
-  'Руководитель',
-  'Организатор',
-  'Исполнитель',
-  'Волонтер',
-  'Участник',
-];
-
 function hasValue(value) {
   return value !== null && value !== undefined && value !== '';
-}
-
-function getStudentName(student) {
-  return [student?.last_name, student?.first_name, student?.middle_name].filter(Boolean).join(' ');
 }
 
 function getValidationMessages(formData) {
@@ -49,24 +53,12 @@ function FormField({ label, name, value, onChange, required = false, type = 'tex
     <div className="events-form__field">
       <label className="events-form__label" htmlFor={name}>{label}{required && <span className="events-form__required">*</span>}</label>
       {as === 'select' ? (
-        <select {...commonProps}><option value="">Выберите значение</option>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>
+        <select {...commonProps}><option value="">Выберите значение</option>{options.map((o) => <option key={o} value={o}>{o}</option>)}</select>
       ) : as === 'textarea' ? (
         <textarea {...commonProps} rows="3" />
       ) : (
         <input {...commonProps} type={type} />
       )}
-    </div>
-  );
-}
-
-function TimeSlotInput({ slot, onChange, onRemove }) {
-  return (
-    <div className="time-slot-input">
-      <input type="date" className="time-slot-input__date" value={slot.date} onChange={(e) => onChange('date', e.target.value)} />
-      <input type="time" className="time-slot-input__time" value={slot.start} onChange={(e) => onChange('start', e.target.value)} />
-      <span className="time-slot-input__separator">-</span>
-      <input type="time" className="time-slot-input__time" value={slot.end} onChange={(e) => onChange('end', e.target.value)} />
-      <button type="button" className="time-slot-input__remove" onClick={onRemove}>✕</button>
     </div>
   );
 }
@@ -77,16 +69,10 @@ function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) 
   const wrapperRef = useRef(null);
 
   function getSuggestions(searchValue = '') {
-    if (!eventTypesList || eventTypesList.length === 0) {
-      return [];
-    }
-
+    if (!eventTypesList || eventTypesList.length === 0) return [];
     const search = searchValue.toLowerCase().trim();
-    if (!search) {
-      return eventTypesList;
-    }
-
-    return eventTypesList.filter(et => (et.event_type_name || '').toLowerCase().includes(search));
+    if (!search) return eventTypesList;
+    return eventTypesList.filter((et) => (et.event_type_name || '').toLowerCase().includes(search));
   }
 
   function openSuggestions(searchValue = value) {
@@ -96,9 +82,8 @@ function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) 
   }
 
   function handleChange(e) {
-    const val = e.target.value;
-    onChange(val);
-    openSuggestions(val);
+    onChange(e.target.value);
+    openSuggestions(e.target.value);
   }
 
   function handleSelect(eventType) {
@@ -143,39 +128,19 @@ function EventTypeInput({ value, eventTypesList, onSelectEventType, onChange }) 
   );
 }
 
-function ParticipantCard({ participant, index, onRemove, onAddTimeSlot, onUpdateTimeSlot, onRemoveTimeSlot }) {
-  return (
-    <div className="participant-wrapper">
-      <div className="participant-card">
-        <div className="participant-card__main">
-          <input type="text" className="participant-card__fio" placeholder="Фамилия Имя Отчество" value={participant.fio} readOnly />
-          <select className="participant-card__role"><option value="">{participant.role || 'Роль'}</option></select>
-          <input type="text" className="participant-card__phone" value="+7(000)000-00-00" disabled />
-        </div>
-        <div className="participant-card__time">
-          <div className="participant-card__duration">
-            <span className="participant-card__duration-text">0 ч.</span>
-          </div>
-          <div className="participant-card__slots">
-            {participant.timeSlots.map((slot, sIdx) => (
-              <TimeSlotInput key={sIdx} slot={slot} onChange={(f, v) => onUpdateTimeSlot(index, sIdx, f, v)} onRemove={() => onRemoveTimeSlot(index, sIdx)} />
-            ))}
-            <button type="button" className="participant-card__add-time" onClick={() => onAddTimeSlot(index)}>+</button>
-          </div>
-        </div>
-      </div>
-      <button type="button" className="participant-card__remove-outside" onClick={() => onRemove(index)}>−</button>
-    </div>
-  );
-}
-
 export function EventEditPage() {
   const [formData, setFormData] = useState({
-    event_name: '', event_level: '', event_type: '', organizer_name: '',
-    start_date: '', end_date: '', start_time: '', end_time: '',
-    duration_hours: '', event_comment: '',
+    event_name: '',
+    event_level: '',
+    event_type: '',
+    organizer_name: '',
+    start_date: '',
+    end_date: '',
+    duration_hours: '',
+    event_comment: '',
   });
   const [participants, setParticipants] = useState([]);
+  const [scheduleRows, setScheduleRows] = useState([]);
   const [isParticipantsExpanded, setIsParticipantsExpanded] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -184,32 +149,20 @@ export function EventEditPage() {
   const [eventTypesCache, setEventTypesCache] = useState([]);
   const [eventData, setEventData] = useState(null);
   const [studentsCache, setStudentsCache] = useState([]);
-  const [newParticipant, setNewParticipant] = useState({ student_id: '', role_name: '' });
 
-  // Получаем ID из URL
   useEffect(() => {
-    try {
-      const hash = window.location.hash;
-      const queryString = hash.includes('?') ? hash.split('?')[1] : window.location.search;
-      const params = new URLSearchParams(queryString);
-      const id = params.get('id');
-
-      console.log('EventEditPage: ID из URL:', id);
-
-      if (id) {
-        setEventId(Number(id));
-      } else {
-        setError('Не указан ID мероприятия');
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error('Ошибка при получении ID:', err);
-      setError('Ошибка при получении ID мероприятия');
+    const hash = window.location.hash;
+    const queryString = hash.includes('?') ? hash.split('?')[1] : window.location.search;
+    const params = new URLSearchParams(queryString);
+    const id = params.get('id');
+    if (id) {
+      setEventId(Number(id));
+    } else {
+      setError('Не указан ID мероприятия');
       setLoading(false);
     }
   }, []);
 
-  // Загрузка студентов
   useEffect(() => {
     let isMounted = true;
     async function loadStudents() {
@@ -224,7 +177,6 @@ export function EventEditPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // Загрузка типов мероприятий
   useEffect(() => {
     let isMounted = true;
     async function loadEventTypes() {
@@ -239,7 +191,6 @@ export function EventEditPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // Загрузка данных мероприятия
   useEffect(() => {
     if (!eventId) return;
 
@@ -247,10 +198,7 @@ export function EventEditPage() {
       try {
         setLoading(true);
         setError('');
-        console.log('Загрузка мероприятия с ID:', eventId);
-
         const event = await getEvent(eventId);
-        console.log('Получены данные мероприятия:', event);
         setEventData(event);
 
         const formatTimeForInput = (isoString) => {
@@ -258,14 +206,12 @@ export function EventEditPage() {
           if (typeof isoString === 'string' && /^\d{2}:\d{2}/.test(isoString)) {
             return isoString.slice(0, 5);
           }
-          const date = new Date(isoString);
-          return date.toTimeString().slice(0, 5);
+          return new Date(isoString).toTimeString().slice(0, 5);
         };
 
         const formatDateForInput = (isoString) => {
           if (!isoString) return '';
-          const date = new Date(isoString);
-          return date.toISOString().split('T')[0];
+          return new Date(isoString).toISOString().split('T')[0];
         };
 
         setFormData({
@@ -275,17 +221,22 @@ export function EventEditPage() {
           organizer_name: event.organizer_name || '',
           start_date: formatDateForInput(event.start_date),
           end_date: formatDateForInput(event.end_date),
-          start_time: formatTimeForInput(event.start_time),
-          end_time: formatTimeForInput(event.end_time),
           duration_hours: event.duration_hours || '',
           event_comment: event.event_comment || '',
         });
 
-        if (event.participants && event.participants.length > 0) {
-          setParticipants(event.participants);
+        const startD = formatDateForInput(event.start_date);
+        const endD = formatDateForInput(event.end_date) || startD;
+        const dates = enumerateEventDates(startD, endD);
+        const fromApi = apiScheduleToRows(event.event_daily_schedule);
+        if (fromApi.length > 0) {
+          setScheduleRows(mergeScheduleWithDates(dates, fromApi));
+        } else {
+          const st = formatTimeForInput(event.start_time);
+          const et = formatTimeForInput(event.end_time);
+          setScheduleRows(dates.map((d) => ({ date: d, start: st, end: et })));
         }
       } catch (err) {
-        console.error('Error loading event:', err);
         setError(err instanceof Error ? err.message : 'Не удалось загрузить данные мероприятия');
       } finally {
         setLoading(false);
@@ -295,18 +246,14 @@ export function EventEditPage() {
     loadEvent();
   }, [eventId]);
 
-  // Загрузка участников
   useEffect(() => {
     if (!eventId) return;
 
     let isMounted = true;
     async function loadParticipants() {
       try {
-        console.log('Загрузка участников для мероприятия:', eventId);
         const data = await listEventParticipants(eventId);
         if (!isMounted) return;
-
-        console.log('Получены участники:', data);
 
         setParticipants(
           data.map((participant) => {
@@ -314,99 +261,76 @@ export function EventEditPage() {
             return {
               ...participant,
               id: participant.participation_id,
-              fio: getStudentName(student) || `ID ${participant.student_id}`,
+              participation_id: participant.participation_id,
+              fio: getStudentFullName(student) || `ID ${participant.student_id}`,
               role: participant.role_name,
-              phone: student?.phone || '',
+              phone: student?.phone ? normalizePhoneDigits(student.phone) : '',
+              student_id: participant.student_id,
+              isPersisted: true,
               timeSlots: [],
             };
-          })
+          }),
         );
       } catch (err) {
         console.error('Не удалось загрузить участников мероприятия:', err);
       }
     }
 
-    // Ждем загрузки studentsCache
-    if (studentsCache.length > 0 || participants.length === 0) {
-      loadParticipants();
-    }
+    loadParticipants();
     return () => { isMounted = false; };
   }, [eventId, studentsCache]);
 
-  // Заполняем тип мероприятия
   useEffect(() => {
     if (eventData && eventTypesCache.length > 0 && eventData.event_type_id) {
-      const type = eventTypesCache.find(et => et.event_type_id === eventData.event_type_id);
+      const type = eventTypesCache.find((et) => et.event_type_id === eventData.event_type_id);
       if (type) {
-        setFormData(prev => ({ ...prev, event_type: type.event_type_name }));
+        setFormData((prev) => ({ ...prev, event_type: type.event_type_name }));
       }
     }
   }, [eventData, eventTypesCache]);
 
-  // Расчет длительности
   useEffect(() => {
-    function calculateDurationInHours() {
-      if (!formData.start_date || !formData.end_date) {
-        return;
-      }
+    const end = formData.end_date || formData.start_date;
+    const dates = enumerateEventDates(formData.start_date, end);
+    if (dates.length === 0) {
+      setScheduleRows([]);
+      return;
+    }
+    setScheduleRows((prev) => mergeScheduleWithDates(dates, prev));
+  }, [formData.start_date, formData.end_date]);
 
-      const startDateOnly = new Date(formData.start_date);
-      const endDateOnly = new Date(formData.end_date);
-      startDateOnly.setHours(0, 0, 0, 0);
-      endDateOnly.setHours(0, 0, 0, 0);
-
-      const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
-
-      let startHours = 0;
-      let endHours = 0;
-
-      if (formData.start_time) {
-        const [hours, minutes] = formData.start_time.split(':').map(Number);
-        startHours = hours + minutes / 60;
-      }
-
-      if (formData.end_time) {
-        const [hours, minutes] = formData.end_time.split(':').map(Number);
-        endHours = hours + minutes / 60;
-      } else if (formData.start_time) {
-        endHours = 24;
-      } else {
-        return daysDiff * 8;
-      }
-
-      const hoursPerDay = endHours - startHours;
-
-      if (hoursPerDay <= 0) {
-        return daysDiff * 8;
-      }
-
-      const totalHours = daysDiff * hoursPerDay;
-      const roundedHours = Math.round(totalHours * 2) / 2;
-
-      return roundedHours;
+  useEffect(() => {
+    const fromSchedule = sumScheduleHours(scheduleRows);
+    if (fromSchedule > 0) {
+      setFormData((prev) => ({ ...prev, duration_hours: String(fromSchedule) }));
+      return;
     }
 
-    const calculatedDuration = calculateDurationInHours();
+    const start = formData.start_date;
+    const end = formData.end_date || formData.start_date;
+    if (!start || !end) return;
 
-    if (calculatedDuration !== undefined && calculatedDuration !== null && !isNaN(calculatedDuration)) {
-      setFormData(prev => ({
-        ...prev,
-        duration_hours: calculatedDuration.toString()
-      }));
+    const startDateOnly = new Date(start);
+    const endDateOnly = new Date(end);
+    startDateOnly.setHours(0, 0, 0, 0);
+    endDateOnly.setHours(0, 0, 0, 0);
+
+    const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
+    const calculatedDuration = daysDiff * 8;
+
+    if (!Number.isNaN(calculatedDuration)) {
+      setFormData((prev) => ({ ...prev, duration_hours: calculatedDuration.toString() }));
     }
-  }, [formData.start_date, formData.start_time, formData.end_date, formData.end_time]);
+  }, [scheduleRows, formData.start_date, formData.end_date]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   async function resolveEventTypeId(typeName) {
     if (!typeName) return null;
-
-    const existing = eventTypesCache.find(
-      et => et.event_type_name.toLowerCase() === typeName.toLowerCase()
-    );
+    const existing = eventTypesCache.find((et) => et.event_type_name.toLowerCase() === typeName.toLowerCase());
     if (existing) return existing.event_type_id;
 
     try {
@@ -415,7 +339,7 @@ export function EventEditPage() {
         description: null,
         is_active: true,
       });
-      setEventTypesCache(prev => [...prev, newType]);
+      setEventTypesCache((prev) => [...prev, newType]);
       return newType.event_type_id;
     } catch (err) {
       console.error('Не удалось создать тип:', err);
@@ -423,10 +347,59 @@ export function EventEditPage() {
     }
   }
 
+  function addParticipant() {
+    setParticipants((prev) => [
+      ...prev,
+      { id: Date.now(), fio: '', role: 'Участник', phone: '', student_id: null, isPersisted: false, timeSlots: [] },
+    ]);
+    setIsParticipantsExpanded(true);
+  }
+
+  function updateParticipant(index, updatedParticipant) {
+    setParticipants((prev) => prev.map((p, i) => (i === index ? updatedParticipant : p)));
+  }
+
+  function addTimeSlot(index) {
+    setParticipants((prev) => prev.map((p, i) => (i === index ? { ...p, timeSlots: [...p.timeSlots, { date: '', start: '', end: '' }] } : p)));
+  }
+
+  function removeTimeSlot(index, slotIdx) {
+    setParticipants((prev) => prev.map((p, i) => (i === index ? { ...p, timeSlots: p.timeSlots.filter((_, si) => si !== slotIdx) } : p)));
+  }
+
+  function updateTimeSlot(index, slotIdx, field, value) {
+    setParticipants((prev) => prev.map((p, i) => {
+      if (i !== index) return p;
+      const newSlots = [...p.timeSlots];
+      newSlots[slotIdx] = { ...newSlots[slotIdx], [field]: value };
+      return { ...p, timeSlots: newSlots };
+    }));
+  }
+
+  async function handleRemoveParticipant(index) {
+    const participant = participants[index];
+    if (!participant) return;
+
+    if (participant.isPersisted && participant.participation_id) {
+      try {
+        await deleteEventParticipant(eventId, participant.participation_id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Не удалось удалить участника.');
+        return;
+      }
+    }
+
+    setParticipants((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const validationMessages = getValidationMessages(formData);
+    const newParticipants = participants.filter((participant) => !participant.isPersisted);
+    const validationMessages = [
+      ...getValidationMessages(formData),
+      ...getParticipantValidationMessages(newParticipants),
+    ];
     if (validationMessages.length > 0) {
       setError(validationMessages.join(' '));
       return;
@@ -438,30 +411,63 @@ export function EventEditPage() {
     try {
       const eventTypeId = await resolveEventTypeId(formData.event_type?.trim());
 
+      const endDateFinal = formData.end_date || formData.start_date;
+      const scheduleApi = scheduleRowsToApi(scheduleRows);
+
       const payload = {
         event_name: formData.event_name.trim(),
         event_level: formData.event_level,
         event_type_id: eventTypeId,
         organizer_name: formData.organizer_name?.trim() || null,
         start_date: formData.start_date || null,
-        end_date: formData.end_date || null,
+        end_date: endDateFinal || null,
         participants_planned: participants.length,
         duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
         event_comment: formData.event_comment?.trim() || null,
+        event_daily_schedule: scheduleApi.length > 0 ? scheduleApi : null,
       };
 
-      if (formData.start_date && formData.start_time) {
-        payload.start_time = `${formData.start_time}:00`;
-      }
-      if (formData.end_date && formData.end_time) {
-        payload.end_time = `${formData.end_time}:00`;
+      if (scheduleApi.length > 0) {
+        payload.start_time = null;
+        payload.end_time = null;
       }
 
-      console.log('Отправка payload:', payload);
       await updateEvent(eventId, payload);
+
+      let updatedStudentsCache = [...studentsCache];
+      for (const participant of newParticipants) {
+        const studentId = await resolveParticipantStudentId(participant, updatedStudentsCache);
+        const created = await createEventParticipant(eventId, {
+          student_id: studentId,
+          role_name: participant.role || 'Участник',
+          participation_status: 'planned',
+          notes: buildParticipantNotes(participant),
+        });
+
+        const student = updatedStudentsCache.find((item) => item.student_id === studentId);
+        setParticipants((prev) => prev.map((item) => (
+          item.id === participant.id
+            ? {
+                ...item,
+                ...created,
+                participation_id: created.participation_id,
+                student_id: studentId,
+                fio: getStudentFullName(student) || item.fio,
+                role: created.role_name,
+                isPersisted: true,
+              }
+            : item
+        )));
+
+        if (!student) {
+          const freshStudents = await listStudents({ limit: 200, isActive: true });
+          updatedStudentsCache = freshStudents;
+          setStudentsCache(freshStudents);
+        }
+      }
+
       window.location.hash = 'events-list';
     } catch (err) {
-      console.error('Error updating event:', err);
       setError(err instanceof Error ? err.message : 'Не удалось сохранить изменения');
     } finally {
       setIsSubmitting(false);
@@ -471,49 +477,6 @@ export function EventEditPage() {
   const validationMessages = getValidationMessages(formData);
   const isValid = validationMessages.length === 0;
 
-  async function handleAddParticipant() {
-    if (!eventId || !newParticipant.student_id || !newParticipant.role_name) return;
-
-    try {
-      const created = await createEventParticipant(eventId, {
-        student_id: Number(newParticipant.student_id),
-        role_name: newParticipant.role_name,
-        participation_status: 'planned',
-        notes: null,
-      });
-      const student = studentsCache.find((item) => item.student_id === created.student_id);
-      setParticipants((prev) => [
-        ...prev,
-        {
-          ...created,
-          id: created.participation_id,
-          fio: getStudentName(student) || `ID ${created.student_id}`,
-          role: created.role_name,
-          phone: student?.phone || '',
-          timeSlots: [],
-        },
-      ]);
-      setNewParticipant({ student_id: '', role_name: '' });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось добавить участника.');
-    }
-  }
-
-  async function handleRemoveParticipant(index) {
-    const participant = participants[index];
-    if (!eventId || !participant?.participation_id) return;
-
-    try {
-      await deleteEventParticipant(eventId, participant.participation_id);
-      setParticipants((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось удалить участника.');
-    }
-  }
-
-  // Отладочный вывод
-  console.log('EventEditPage rendering, loading:', loading, 'error:', error, 'eventId:', eventId);
-
   if (loading) {
     return (
       <div className="event-create-page">
@@ -522,25 +485,12 @@ export function EventEditPage() {
     );
   }
 
-  if (error) {
+  if (!eventId && error) {
     return (
       <div className="event-create-page">
         <div className="error-message" style={{ margin: '20px' }}>
           <p>Ошибка: {error}</p>
-          <button onClick={() => { window.location.hash = 'events-list'; }} className="retry-button">
-            Вернуться к списку
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!eventId) {
-    return (
-      <div className="event-create-page">
-        <div className="error-message" style={{ margin: '20px' }}>
-          <p>ID мероприятия не найден в URL</p>
-          <button onClick={() => { window.location.hash = 'events-list'; }} className="retry-button">
+          <button type="button" onClick={() => { window.location.hash = 'events-list'; }} className="retry-button">
             Вернуться к списку
           </button>
         </div>
@@ -560,7 +510,7 @@ export function EventEditPage() {
       {error && (
         <div className="error-message" style={{ margin: '20px' }}>
           {error}
-          <button onClick={() => setError('')} className="retry-button">Закрыть</button>
+          <button type="button" onClick={() => setError('')} className="retry-button">Закрыть</button>
         </div>
       )}
 
@@ -575,16 +525,15 @@ export function EventEditPage() {
               <EventTypeInput
                 value={formData.event_type}
                 eventTypesList={eventTypesCache}
-                onChange={(val) => setFormData(prev => ({ ...prev, event_type: val }))}
+                onChange={(val) => setFormData((prev) => ({ ...prev, event_type: val }))}
                 onSelectEventType={() => {}}
               />
             </div>
 
             <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} placeholder="ФИО" />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
-            <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
-            <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" />
+            <EventDayScheduleEditor rows={scheduleRows} onRowsChange={setScheduleRows} />
             <FormField label="Количество участников" name="participants_planned" value={participants.length} disabled />
             <FormField label="Длительность (общее время мероприятия, ч)" name="duration_hours" value={formData.duration_hours} onChange={handleChange} disabled placeholder="0 ч." />
             <FormField label="Комментарий" name="event_comment" value={formData.event_comment} onChange={handleChange} as="textarea" />
@@ -592,56 +541,49 @@ export function EventEditPage() {
         </div>
 
         <div className="participants-section">
-          <div className="participants-section__header participants-section__header--clickable" onClick={() => setIsParticipantsExpanded(!isParticipantsExpanded)}>
+          <div
+            className="participants-section__header participants-section__header--clickable"
+            onClick={() => setIsParticipantsExpanded(!isParticipantsExpanded)}
+          >
             <h2 className="participants-section__title">Участники</h2>
             <button type="button" className="participants-section__toggle">
               <svg className={`participants-section__toggle-icon ${isParticipantsExpanded ? 'participants-section__toggle-icon--expanded' : ''}`} width="16" height="10" viewBox="0 0 16 10" fill="none">
-                <path d="M1 1L8 8L15 1" stroke="#005BAA" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M1 1L8 8L15 1" stroke="#005BAA" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           </div>
 
           {isParticipantsExpanded && (
-            <div className="participants-table">
+            <>
               <div className="participants-section__count">Всего: {participants.length}</div>
-              <div className="participant-card">
-                <div className="participant-card__main">
-                  <select
-                    className="participant-card__fio"
-                    value={newParticipant.student_id}
-                    onChange={(event) => setNewParticipant((prev) => ({ ...prev, student_id: event.target.value }))}
-                  >
-                    <option value="">Выберите студента</option>
-                    {studentsCache.map((student) => (
-                      <option key={student.student_id} value={student.student_id}>
-                        {getStudentName(student)}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="participant-card__role"
-                    value={newParticipant.role_name}
-                    onChange={(event) => setNewParticipant((prev) => ({ ...prev, role_name: event.target.value }))}
-                  >
-                    <option value="">Роль</option>
-                    {roleOptions.map((role) => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
-                  </select>
-                  <button
-                    className="participant-card__add-time"
-                    type="button"
-                    onClick={handleAddParticipant}
-                    disabled={!newParticipant.student_id || !newParticipant.role_name}
-                  >
-                    +
-                  </button>
-                </div>
+              <div className="participants-table">
+                {participants.length === 0 ? (
+                  <div className="participants-table__empty">Список участников пуст. Нажмите «+» чтобы добавить.</div>
+                ) : (
+                  participants.map((participant, idx) => (
+                    <ParticipantCard
+                      key={participant.participation_id || participant.id}
+                      participant={participant}
+                      index={idx}
+                      studentsList={studentsCache}
+                      readOnly={participant.isPersisted}
+                      showTimeSlots={!participant.isPersisted}
+                      onRemove={handleRemoveParticipant}
+                      onAddTimeSlot={addTimeSlot}
+                      onRemoveTimeSlot={removeTimeSlot}
+                      onUpdateTimeSlot={updateTimeSlot}
+                      onUpdateParticipant={updateParticipant}
+                    />
+                  ))
+                )}
               </div>
-              {participants.map((p, idx) => (
-                <ParticipantCard key={p.participation_id || p.id} participant={p} index={idx} onRemove={handleRemoveParticipant} onAddTimeSlot={() => {}} onUpdateTimeSlot={() => {}} onRemoveTimeSlot={() => {}} />
-              ))}
-            </div>
+              <div className="participants-section__plus-container">
+                <button type="button" className="participants-section__plus-btn" onClick={addParticipant} aria-label="Добавить участника">
+                  <div className="participants-section__plus-horizontal" />
+                  <div className="participants-section__plus-vertical" />
+                </button>
+              </div>
+            </>
           )}
         </div>
 

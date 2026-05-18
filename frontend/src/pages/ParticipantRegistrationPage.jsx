@@ -404,35 +404,73 @@ export function ParticipantRegistrationPage() {
 
         {activeTab === 'personal' ? (
         <Section>
-          <div className="registration-page__grid">
-            <FormField label="Фамилия" name="last_name" value={formData.last_name} onChange={handleChange} required placeholder="Фамилия" />
-            <FormField label="Имя" name="first_name" value={formData.first_name} onChange={handleChange} required placeholder="Имя" />
-            <FormField label="Отчество" name="middle_name" value={formData.middle_name} onChange={handleChange} placeholder="Отчество" />
-            <FormField
-              label="Дата рождения"
-              name="birth_date"
-              value={formData.birth_date}
-              onChange={handleChange}
-              required
-              placeholder="00.00.0000"
-              maxLength={10}
-              pattern="\d{2}\.\d{2}\.\d{4}"
-              title="Введите дату в формате 00.00.0000"
-              {...digitInputProps}
-            />
-            <FormField
-              label="Институт"
-              name="institute"
-              value={formData.institute}
-              onChange={handleChange}
-              required
-              as="select"
-              options={instituteOptions}
-            />
-            <FormField label="Группа" name="study_group" value={formData.study_group} onChange={handleChange} required placeholder="Б9123-09.03.03цтэ" />
+          <div className="registration-page__personal-layout">
+
+            <div className="registration-page__column">
+              <FormField
+                label="Фамилия"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleChange}
+                required
+                placeholder="Фамилия"
+              />
+
+              <FormField
+                label="Имя"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleChange}
+                required
+                placeholder="Имя"
+              />
+
+              <FormField
+                label="Отчество"
+                name="middle_name"
+                value={formData.middle_name}
+                onChange={handleChange}
+                placeholder="Отчество"
+              />
+            </div>
+
+            <div className="registration-page__column">
+              <FormField
+                label="Институт"
+                name="institute"
+                value={formData.institute}
+                onChange={handleChange}
+                required
+                as="select"
+                options={instituteOptions}
+              />
+
+              <FormField
+                label="Дата рождения"
+                name="birth_date"
+                value={formData.birth_date}
+                onChange={handleChange}
+                required
+                placeholder="00.00.0000"
+                maxLength={10}
+                pattern="\d{2}\.\d{2}\.\d{4}"
+                title="Введите дату в формате 00.00.0000"
+                {...digitInputProps}
+              />
+
+              <FormField
+                label="Группа"
+                name="study_group"
+                value={formData.study_group}
+                onChange={handleChange}
+                required
+                placeholder="Б9123-09.03.03цтэ"
+              />
+            </div>
+
           </div>
         </Section>
-        ) : null}
+      ) : null}
 
         {activeTab === 'contacts' ? (
         <Section>
