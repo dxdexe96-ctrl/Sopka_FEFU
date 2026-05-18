@@ -6,6 +6,7 @@ import {
 } from '../lib/api.js';
 
 import './EventsListPage.css';
+import { formatEventScheduleSummary } from '../lib/eventScheduleUtils.js';
 import { EventViewModal } from './EventViewModal';
 
 function formatDate(dateString) {
@@ -337,12 +338,15 @@ export function EventsListPage() {
                   )}
                   <br />
 
-                  {formatTime(event.start_time)}
-
-                  {event.end_time && (
+                  {formatEventScheduleSummary(event) || (
                     <>
-                      {' - '}
-                      {formatTime(event.end_time)}
+                      {formatTime(event.start_time)}
+                      {event.end_time && (
+                        <>
+                          {' - '}
+                          {formatTime(event.end_time)}
+                        </>
+                      )}
                     </>
                   )}
                 </span>

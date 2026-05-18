@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { createEvent, createEventParticipant, listStudents, listEventTypes, createEventType } from '../lib/api.js';
 import { ParticipantCard } from '../components/EventParticipantFields.jsx';
+import { EventDayScheduleEditor } from '../components/EventDayScheduleEditor.jsx';
 import {
   buildParticipantNotes,
   getParticipantValidationMessages,
   resolveParticipantStudentId,
 } from '../lib/participantUtils.js';
+import {
+  enumerateEventDates,
+  mergeScheduleWithDates,
+  scheduleRowsToApi,
+  sumScheduleHours,
+} from '../lib/eventScheduleUtils.js';
 import './EventCreatePage.css';
 
 const eventLevelOptions = [
@@ -23,8 +30,6 @@ const initialFormState = {
   organizer_name: '',
   start_date: '',
   end_date: '',
-  start_time: '',
-  end_time: '',
   participants_planned: '',
   duration_hours: '',
   event_comment: '',
@@ -140,6 +145,7 @@ export function EventCreatePage() {
   const [participants, setParticipants] = useState([]);
   const [studentsCache, setStudentsCache] = useState([]);
   const [eventTypesCache, setEventTypesCache] = useState([]);
+  const [scheduleRows, setScheduleRows] = useState([]);
   const [isParticipantsExpanded, setIsParticipantsExpanded] = useState(false);
   const [status, setStatus] = useState({ type: 'error', messages: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -177,51 +183,41 @@ export function EventCreatePage() {
   }, [participants]);
 
   useEffect(() => {
-    function calculateDurationInHours() {
-      if (!formData.start_date || !formData.end_date) {
-        return;
-      }
+    const end = formData.end_date || formData.start_date;
+    const dates = enumerateEventDates(formData.start_date, end);
+    if (dates.length === 0) {
+      setScheduleRows([]);
+      return;
+    }
+    setScheduleRows((prev) => mergeScheduleWithDates(dates, prev));
+  }, [formData.start_date, formData.end_date]);
 
-      const startDateOnly = new Date(formData.start_date);
-      const endDateOnly = new Date(formData.end_date);
-      startDateOnly.setHours(0, 0, 0, 0);
-      endDateOnly.setHours(0, 0, 0, 0);
-
-      const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
-
-      let startHours = 0;
-      let endHours = 0;
-
-      if (formData.start_time) {
-        const [hours, minutes] = formData.start_time.split(':').map(Number);
-        startHours = hours + minutes / 60;
-      }
-
-      if (formData.end_time) {
-        const [hours, minutes] = formData.end_time.split(':').map(Number);
-        endHours = hours + minutes / 60;
-      } else if (formData.start_time) {
-        endHours = 24;
-      } else {
-        return daysDiff * 8;
-      }
-
-      const hoursPerDay = endHours - startHours;
-      if (hoursPerDay <= 0) {
-        return daysDiff * 8;
-      }
-
-      return Math.round(daysDiff * hoursPerDay * 2) / 2;
+  useEffect(() => {
+    const fromSchedule = sumScheduleHours(scheduleRows);
+    if (fromSchedule > 0) {
+      setFormData((prev) => ({ ...prev, duration_hours: String(fromSchedule) }));
+      return;
     }
 
-    const calculatedDuration = calculateDurationInHours();
-    if (calculatedDuration !== undefined && calculatedDuration !== null && !Number.isNaN(calculatedDuration)) {
+    const start = formData.start_date;
+    const end = formData.end_date || formData.start_date;
+    if (!start || !end) return;
+
+    const startDateOnly = new Date(start);
+    const endDateOnly = new Date(end);
+    startDateOnly.setHours(0, 0, 0, 0);
+    endDateOnly.setHours(0, 0, 0, 0);
+
+    const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
+    const calculatedDuration = daysDiff * 8;
+
+    if (!Number.isNaN(calculatedDuration)) {
       setFormData((prev) => ({
         ...prev,
         duration_hours: calculatedDuration.toString(),
       }));
     }
-  }, [formData.start_date, formData.start_time, formData.end_date, formData.end_time]);
+  }, [scheduleRows, formData.start_date, formData.end_date]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -299,20 +295,26 @@ export function EventCreatePage() {
         }
       }
 
+      const endDateFinal = formData.end_date || formData.start_date;
+      const scheduleApi = scheduleRowsToApi(scheduleRows);
+
       const payload = {
         event_name: formData.event_name.trim(),
         event_level: formData.event_level,
         event_type_id: eventTypeId,
         organizer_name: formData.organizer_name?.trim() || null,
         start_date: formData.start_date || null,
-        end_date: formData.end_date || null,
+        end_date: endDateFinal || null,
         participants_planned: formData.participants_planned ? parseInt(formData.participants_planned, 10) : null,
         duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
         event_comment: formData.event_comment?.trim() || null,
+        event_daily_schedule: scheduleApi.length > 0 ? scheduleApi : null,
       };
 
-      if (formData.start_time) payload.start_time = `${formData.start_time}:00`;
-      if (formData.end_time) payload.end_time = `${formData.end_time}:00`;
+      if (scheduleApi.length > 0) {
+        payload.start_time = null;
+        payload.end_time = null;
+      }
 
       const createdEvent = await createEvent(payload);
 
@@ -337,6 +339,7 @@ export function EventCreatePage() {
       setStatus({ type: 'success', message: 'Мероприятие успешно создано!' });
       setFormData(initialFormState);
       setParticipants([]);
+      setScheduleRows([]);
       setIsParticipantsExpanded(false);
       setTimeout(() => setStatus({ type: 'idle', messages: [] }), 2000);
     } catch (err) {
@@ -374,9 +377,8 @@ export function EventCreatePage() {
 
             <FormField label="Организация" name="organizer_name" value={formData.organizer_name} onChange={handleChange} />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
-            <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" step="1800" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
-            <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" step="1800" />
+            <EventDayScheduleEditor rows={scheduleRows} onRowsChange={setScheduleRows} />
             <FormField label="Количество участников" name="participants_planned" value={formData.participants_planned} onChange={handleChange} type="number" placeholder="0" disabled />
             <FormField label="Общее время мероприятия в часах" name="duration_hours" value={formData.duration_hours} onChange={handleChange} type="number" step="0.5" placeholder="0 ч." disabled />
             <FormField label="Комментарий" name="event_comment" value={formData.event_comment} onChange={handleChange} as="textarea" placeholder="Комментарий" />

@@ -144,6 +144,8 @@ export function ParticipantCard({
           <input
             type="text"
             className="participant-card__phone"
+            inputMode="tel"
+            autoComplete="tel"
             value={participant.phone ? formatPhone(participant.phone) : ''}
             onChange={(e) => {
               const digits = normalizePhoneDigits(e.target.value);

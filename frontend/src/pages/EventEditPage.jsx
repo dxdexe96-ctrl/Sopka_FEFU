@@ -10,6 +10,7 @@ import {
   updateEvent,
 } from '../lib/api.js';
 import { ParticipantCard } from '../components/EventParticipantFields.jsx';
+import { EventDayScheduleEditor } from '../components/EventDayScheduleEditor.jsx';
 import {
   buildParticipantNotes,
   getParticipantValidationMessages,
@@ -17,6 +18,13 @@ import {
   normalizePhoneDigits,
   resolveParticipantStudentId,
 } from '../lib/participantUtils.js';
+import {
+  apiScheduleToRows,
+  enumerateEventDates,
+  mergeScheduleWithDates,
+  scheduleRowsToApi,
+  sumScheduleHours,
+} from '../lib/eventScheduleUtils.js';
 import './EventCreatePage.css';
 
 const eventLevelOptions = [
@@ -128,12 +136,11 @@ export function EventEditPage() {
     organizer_name: '',
     start_date: '',
     end_date: '',
-    start_time: '',
-    end_time: '',
     duration_hours: '',
     event_comment: '',
   });
   const [participants, setParticipants] = useState([]);
+  const [scheduleRows, setScheduleRows] = useState([]);
   const [isParticipantsExpanded, setIsParticipantsExpanded] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -214,11 +221,21 @@ export function EventEditPage() {
           organizer_name: event.organizer_name || '',
           start_date: formatDateForInput(event.start_date),
           end_date: formatDateForInput(event.end_date),
-          start_time: formatTimeForInput(event.start_time),
-          end_time: formatTimeForInput(event.end_time),
           duration_hours: event.duration_hours || '',
           event_comment: event.event_comment || '',
         });
+
+        const startD = formatDateForInput(event.start_date);
+        const endD = formatDateForInput(event.end_date) || startD;
+        const dates = enumerateEventDates(startD, endD);
+        const fromApi = apiScheduleToRows(event.event_daily_schedule);
+        if (fromApi.length > 0) {
+          setScheduleRows(mergeScheduleWithDates(dates, fromApi));
+        } else {
+          const st = formatTimeForInput(event.start_time);
+          const et = formatTimeForInput(event.end_time);
+          setScheduleRows(dates.map((d) => ({ date: d, start: st, end: et })));
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Не удалось загрузить данные мероприятия');
       } finally {
@@ -273,43 +290,38 @@ export function EventEditPage() {
   }, [eventData, eventTypesCache]);
 
   useEffect(() => {
-    function calculateDurationInHours() {
-      if (!formData.start_date || !formData.end_date) return;
+    const end = formData.end_date || formData.start_date;
+    const dates = enumerateEventDates(formData.start_date, end);
+    if (dates.length === 0) {
+      setScheduleRows([]);
+      return;
+    }
+    setScheduleRows((prev) => mergeScheduleWithDates(dates, prev));
+  }, [formData.start_date, formData.end_date]);
 
-      const startDateOnly = new Date(formData.start_date);
-      const endDateOnly = new Date(formData.end_date);
-      startDateOnly.setHours(0, 0, 0, 0);
-      endDateOnly.setHours(0, 0, 0, 0);
-
-      const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
-
-      let startHours = 0;
-      let endHours = 0;
-
-      if (formData.start_time) {
-        const [hours, minutes] = formData.start_time.split(':').map(Number);
-        startHours = hours + minutes / 60;
-      }
-
-      if (formData.end_time) {
-        const [hours, minutes] = formData.end_time.split(':').map(Number);
-        endHours = hours + minutes / 60;
-      } else if (formData.start_time) {
-        endHours = 24;
-      } else {
-        return daysDiff * 8;
-      }
-
-      const hoursPerDay = endHours - startHours;
-      if (hoursPerDay <= 0) return daysDiff * 8;
-      return Math.round(daysDiff * hoursPerDay * 2) / 2;
+  useEffect(() => {
+    const fromSchedule = sumScheduleHours(scheduleRows);
+    if (fromSchedule > 0) {
+      setFormData((prev) => ({ ...prev, duration_hours: String(fromSchedule) }));
+      return;
     }
 
-    const calculatedDuration = calculateDurationInHours();
-    if (calculatedDuration !== undefined && calculatedDuration !== null && !Number.isNaN(calculatedDuration)) {
+    const start = formData.start_date;
+    const end = formData.end_date || formData.start_date;
+    if (!start || !end) return;
+
+    const startDateOnly = new Date(start);
+    const endDateOnly = new Date(end);
+    startDateOnly.setHours(0, 0, 0, 0);
+    endDateOnly.setHours(0, 0, 0, 0);
+
+    const daysDiff = Math.floor((endDateOnly - startDateOnly) / (1000 * 60 * 60 * 24)) + 1;
+    const calculatedDuration = daysDiff * 8;
+
+    if (!Number.isNaN(calculatedDuration)) {
       setFormData((prev) => ({ ...prev, duration_hours: calculatedDuration.toString() }));
     }
-  }, [formData.start_date, formData.start_time, formData.end_date, formData.end_time]);
+  }, [scheduleRows, formData.start_date, formData.end_date]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -399,23 +411,25 @@ export function EventEditPage() {
     try {
       const eventTypeId = await resolveEventTypeId(formData.event_type?.trim());
 
+      const endDateFinal = formData.end_date || formData.start_date;
+      const scheduleApi = scheduleRowsToApi(scheduleRows);
+
       const payload = {
         event_name: formData.event_name.trim(),
         event_level: formData.event_level,
         event_type_id: eventTypeId,
         organizer_name: formData.organizer_name?.trim() || null,
         start_date: formData.start_date || null,
-        end_date: formData.end_date || null,
+        end_date: endDateFinal || null,
         participants_planned: participants.length,
         duration_hours: formData.duration_hours ? parseFloat(formData.duration_hours) : null,
         event_comment: formData.event_comment?.trim() || null,
+        event_daily_schedule: scheduleApi.length > 0 ? scheduleApi : null,
       };
 
-      if (formData.start_date && formData.start_time) {
-        payload.start_time = `${formData.start_time}:00`;
-      }
-      if (formData.end_date && formData.end_time) {
-        payload.end_time = `${formData.end_time}:00`;
+      if (scheduleApi.length > 0) {
+        payload.start_time = null;
+        payload.end_time = null;
       }
 
       await updateEvent(eventId, payload);
@@ -518,9 +532,8 @@ export function EventEditPage() {
 
             <FormField label="Организатор" name="organizer_name" value={formData.organizer_name} onChange={handleChange} placeholder="ФИО" />
             <FormField label="Дата начала" name="start_date" value={formData.start_date} onChange={handleChange} type="date" required />
-            <FormField label="Время начала" name="start_time" value={formData.start_time} onChange={handleChange} type="time" />
             <FormField label="Дата окончания" name="end_date" value={formData.end_date} onChange={handleChange} type="date" />
-            <FormField label="Время окончания" name="end_time" value={formData.end_time} onChange={handleChange} type="time" />
+            <EventDayScheduleEditor rows={scheduleRows} onRowsChange={setScheduleRows} />
             <FormField label="Количество участников" name="participants_planned" value={participants.length} disabled />
             <FormField label="Длительность (общее время мероприятия, ч)" name="duration_hours" value={formData.duration_hours} onChange={handleChange} disabled placeholder="0 ч." />
             <FormField label="Комментарий" name="event_comment" value={formData.event_comment} onChange={handleChange} as="textarea" />

@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import date, datetime, time
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Time, func
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, Time, func
 from sqlalchemy.orm import Mapped, mapped_column
+from typing import Any
 
 from app.models.base import Base
 
@@ -29,6 +30,7 @@ class Event(Base):
     participants_planned: Mapped[int | None] = mapped_column(Integer)
     duration_hours: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     event_comment: Mapped[str | None] = mapped_column(Text)
+    event_daily_schedule: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now())
 

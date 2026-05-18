@@ -7,14 +7,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import commit_session
 from app.database import get_session
 from app.models.event import Event
-from app.schemas.event import EventCreate, EventRead, EventUpdate
+from app.schemas.event import EventCreate, EventDayScheduleRow, EventRead, EventUpdate
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 
+def _schedule_for_db(rows: list[EventDayScheduleRow] | None) -> list[dict] | None:
+    if not rows:
+        return None
+    return [row.model_dump(mode="json") for row in rows]
+
+
 @router.post("", response_model=EventRead, status_code=201)
 async def create_event(body: EventCreate, session: AsyncSession = Depends(get_session)) -> Event:
-    event = Event(**body.model_dump())
+    data = body.model_dump()
+    data["event_daily_schedule"] = _schedule_for_db(body.event_daily_schedule)
+    event = Event(**data)
     session.add(event)
     await commit_session(session)
     await session.refresh(event)
@@ -46,6 +54,8 @@ async def update_event(event_id: int, body: EventUpdate, session: AsyncSession =
     if event is None:
         raise HTTPException(status_code=404, detail="Мероприятие не найдено.")
     data = body.model_dump(exclude_unset=True)
+    if "event_daily_schedule" in data:
+        data["event_daily_schedule"] = _schedule_for_db(body.event_daily_schedule)
     if not data:
         return event
     for key, value in data.items():

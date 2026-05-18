@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getEventType, listEventParticipants, listStudents } from '../lib/api.js';
+import { formatPhone } from '../lib/participantUtils.js';
+import {
+  formatRuDateShort,
+  formatTimeDisplay,
+} from '../lib/eventScheduleUtils.js';
 import './EventCreatePage.css';
 
 function getStudentName(student) {
@@ -66,6 +71,9 @@ export function EventViewModal({ event, onClose }) {
 
   if (!event) return null;
 
+  const hasDailySchedule = Array.isArray(event.event_daily_schedule)
+    && event.event_daily_schedule.some((r) => r.start_time && r.end_time);
+
   return (
     <div className="modal-overlay">
       <div className="modal-content">
@@ -113,19 +121,31 @@ export function EventViewModal({ event, onClose }) {
                 </div>
                 <div className="events-form__field">
                   <label className="events-form__label">Дата начала</label>
-                  <input className="events-form__control" value={event.start_date} readOnly />
-                </div>
-                <div className="events-form__field">
-                  <label className="events-form__label">Время начала</label>
-                  <input className="events-form__control" value={event.start_time} readOnly />
+                  <input className="events-form__control" value={formatRuDateShort(event.start_date)} readOnly />
                 </div>
                 <div className="events-form__field">
                   <label className="events-form__label">Дата окончания</label>
-                  <input className="events-form__control" value={event.end_date} readOnly />
+                  <input className="events-form__control" value={event.end_date ? formatRuDateShort(event.end_date) : '—'} readOnly />
                 </div>
-                <div className="events-form__field">
-                  <label className="events-form__label">Время окончания</label>
-                  <input className="events-form__control" value={event.end_time} readOnly />
+                <div className="events-form__field" style={{ gridColumn: '1 / -1' }}>
+                  <label className="events-form__label">Расписание по дням</label>
+                  {hasDailySchedule ? (
+                    <div className="event-view-schedule-lines">
+                      {event.event_daily_schedule.map((row) => {
+                        if (!row.start_time || !row.end_time) return null;
+                        const line = `${formatRuDateShort(row.date)}: ${formatTimeDisplay(row.start_time)}–${formatTimeDisplay(row.end_time)}`;
+                        return (
+                          <div key={String(row.date)} className="event-view-schedule-line">{line}</div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="events-form__control" style={{ background: '#f9f9f9' }}>
+                      {formatTimeDisplay(event.start_time)}
+                      {event.end_time ? ` — ${formatTimeDisplay(event.end_time)}` : ''}
+                      {!event.start_time && !event.end_time ? '—' : ''}
+                    </div>
+                  )}
                 </div>
                 <div className="events-form__field">
                   <label className="events-form__label">Количество участников</label>
@@ -165,7 +185,7 @@ export function EventViewModal({ event, onClose }) {
                           <div className="participant-card__main">
                             <input className="participant-card__fio" value={getStudentName(student) || `ID ${participant.student_id}`} readOnly />
                             <input className="participant-card__role" value={participant.role_name} readOnly />
-                            <input className="participant-card__phone" value={student?.phone || ''} readOnly />
+                            <input className="participant-card__phone" value={formatPhone(student?.phone) || '—'} readOnly />
                           </div>
                           {participant.notes ? (
                             <div className="participant-card__time">

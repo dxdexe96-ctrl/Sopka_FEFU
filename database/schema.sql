@@ -140,6 +140,7 @@ create table if not exists events (
     participants_planned integer,
     duration_hours numeric(6,2),
     event_comment text,
+    event_daily_schedule jsonb,
 
     created_at timestamp not null default now(),
 

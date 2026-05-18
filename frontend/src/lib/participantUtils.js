@@ -8,13 +8,15 @@ export const roleOptions = [
   'Участник',
 ];
 
+/** Отображение российского номера: 7XXXXXXXXXX → +7 (XXX) XXX-XX-XX */
 export function formatPhone(value) {
-  if (!value) return '';
-  const digits = value.toString().replace(/\D/g, '').slice(-10);
-  const a = digits.slice(0, 3);
-  const b = digits.slice(3, 6);
-  const c = digits.slice(6, 8);
-  const d = digits.slice(8, 10);
+  const digits = normalizePhoneDigits(value);
+  if (!digits || digits === '7') return digits ? '+7' : '';
+  const rest = digits.slice(1);
+  const a = rest.slice(0, 3);
+  const b = rest.slice(3, 6);
+  const c = rest.slice(6, 8);
+  const d = rest.slice(8, 10);
   if (!a) return '+7';
   if (!b) return `+7 (${a}`;
   if (!c) return `+7 (${a}) ${b}`;
