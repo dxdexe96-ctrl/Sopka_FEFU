@@ -19,6 +19,10 @@ export function EventViewModal({ event, onClose }) {
 
   // Загружаем название типа мероприятия
   useEffect(() => {
+    if (event?.event_type_name) {
+      setEventTypeName(event.event_type_name);
+      return;
+    }
     async function loadEventType() {
       if (event?.event_type_id) {
         try {

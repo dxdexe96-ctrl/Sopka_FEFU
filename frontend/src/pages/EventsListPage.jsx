@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   listEvents,
   deleteEvent as deleteEventApi,
-  listEventParticipants
+  listEventParticipants,
+  listEventTypes,
 } from '../lib/api.js';
 
 import './EventsListPage.css';
@@ -11,65 +12,84 @@ import { EventViewModal } from './EventViewModal';
 
 function formatDate(dateString) {
   if (!dateString) return '';
-
   const date = new Date(dateString);
-
   return date.toLocaleDateString('ru-RU');
 }
 
 function formatTime(timeString) {
   if (!timeString) return '';
-
-  // 14:30:00 -> 14:30
   return timeString.slice(0, 5);
+}
+
+/** YYYY-MM-DD для сравнения периодов */
+function toIsoDate(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  try {
+    return new Date(value).toISOString().slice(0, 10);
+  } catch {
+    return '';
+  }
+}
+
+/** Пересечение интервала мероприятия [start..end] с фильтром [from..to] */
+function eventInDateRange(event, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return true;
+  const from = dateFrom || dateTo;
+  const to = dateTo || dateFrom;
+  const es = toIsoDate(event.start_date);
+  const ee = toIsoDate(event.end_date || event.start_date);
+  if (!es) return false;
+  return es <= to && ee >= from;
 }
 
 export function EventsListPage() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [eventTypeCatalog, setEventTypeCatalog] = useState([]);
 
-  // 🔍 Поиск и фильтры
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    listEventTypes({ limit: 200, isActive: true })
+      .then((data) => {
+        if (mounted) setEventTypeCatalog(data || []);
+      })
+      .catch(() => {
+        if (mounted) setEventTypeCatalog([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     async function loadEventsWithParticipants() {
       try {
         setLoading(true);
-
         const eventsData = await listEvents({ limit: 200 });
 
         const eventsWithCounts = await Promise.all(
           eventsData.map(async (event) => {
             try {
               const participants = await listEventParticipants(event.event_id);
-
-              return {
-                ...event,
-                participants_count: participants.length
-              };
+              return { ...event, participants_count: participants.length };
             } catch (err) {
-              console.error(
-                `Не удалось загрузить участников для мероприятия ${event.event_id}:`,
-                err
-              );
-
-              return {
-                ...event,
-                participants_count: 0
-              };
+              console.error(`Не удалось загрузить участников для мероприятия ${event.event_id}:`, err);
+              return { ...event, participants_count: 0 };
             }
-          })
+          }),
         );
 
         setEvents(eventsWithCounts);
-
       } catch (err) {
         console.error('Не удалось загрузить мероприятия:', err);
-
       } finally {
         setLoading(false);
       }
@@ -78,214 +98,126 @@ export function EventsListPage() {
     loadEventsWithParticipants();
   }, []);
 
-  // 🔍 Фильтрация мероприятий
   const filteredEvents = events.filter((event) => {
-
-    const matchesSearch =
-      event.event_name
-        ?.toLowerCase()
-        .includes(search.toLowerCase());
-
-    const matchesLevel =
-      !levelFilter ||
-      event.event_level === levelFilter;
-
-    const matchesType =
-      !typeFilter ||
-      event.event_type_name === typeFilter;
-
-    const matchesDate =
-      !dateFilter ||
-      event.start_date === dateFilter;
-
-    return (
-      matchesSearch &&
-      matchesLevel &&
-      matchesType &&
-      matchesDate
-    );
+    const matchesSearch = event.event_name?.toLowerCase().includes(search.toLowerCase());
+    const matchesLevel = !levelFilter || event.event_level === levelFilter;
+    const matchesType = !typeFilter || event.event_type_name === typeFilter;
+    const matchesPeriod = eventInDateRange(event, dateFrom, dateTo);
+    return matchesSearch && matchesLevel && matchesType && matchesPeriod;
   });
 
-  // 📋 Уникальные значения
-  const uniqueLevels = [
-    ...new Set(
-      events
-        .map(e => e.event_level)
-        .filter(Boolean)
-    )
-  ];
+  const uniqueLevels = [...new Set(events.map((e) => e.event_level).filter(Boolean))];
 
-  const uniqueTypes = [
+  const typeOptions = [
     ...new Set(
-      events
-        .map(e => e.event_type_name)
-        .filter(Boolean)
-    )
-  ];
+      [
+        ...eventTypeCatalog.map((t) => t.event_type_name).filter(Boolean),
+        ...events.map((e) => e.event_type_name).filter(Boolean),
+      ],
+    ),
+  ].sort((a, b) => a.localeCompare(b, 'ru'));
 
-  // ❌ Удаление мероприятия
   const deleteEvent = async (id, e) => {
     e.stopPropagation();
-
-    if (
-      window.confirm(
-        'Вы уверены, что хотите удалить это мероприятие?'
-      )
-    ) {
+    if (window.confirm('Вы уверены, что хотите удалить это мероприятие?')) {
       try {
         await deleteEventApi(id);
-
-        setEvents(
-          events.filter(event => event.event_id !== id)
-        );
-
+        setEvents(events.filter((event) => event.event_id !== id));
       } catch (err) {
-        alert(
-          'Не удалось удалить: ' +
-          (err.message || 'Ошибка')
-        );
+        alert(`Не удалось удалить: ${err.message || 'Ошибка'}`);
       }
     }
   };
 
-  // ✏️ Переход к редактированию
   const goToEdit = (id, e) => {
     e.stopPropagation();
     window.location.hash = `edit-event?id=${id}`;
   };
 
-  // ⏳ Загрузка
   if (loading) {
     return (
       <div className="events-list-page">
-        <div className="loading-state">
-          Загрузка мероприятий...
-        </div>
+        <div className="loading-state">Загрузка мероприятий...</div>
       </div>
     );
   }
 
   return (
     <div className="events-list-page">
-      {/* HEADER */}
       <div className="events-list-header">
         <div className="top-navigation">
-          <button
-            className="back-home-button"
-            onClick={() => window.location.hash = ''}
-          >
+          <button type="button" className="back-home-button" onClick={() => { window.location.hash = ''; }}>
             ← На главную
           </button>
         </div>
 
         <div className="header-main-row">
-          <h1 className="events-list-title">
-            Мероприятия
-          </h1>
+          <h1 className="events-list-title">Мероприятия</h1>
 
           <div className="events-list-controls">
-
-            <button
-              className="add-event-button"
-              onClick={() =>
-                window.location.hash = 'create-event'
-              }
-            >
+            <button type="button" className="add-event-button" onClick={() => { window.location.hash = 'create-event'; }}>
               Добавить мероприятие
             </button>
-
-            <div className="events-total-count">
-              Найдено: {filteredEvents.length}
-            </div>
-
+            <div className="events-total-count">Найдено: {filteredEvents.length}</div>
           </div>
         </div>
 
-        {/* 🔍 ФИЛЬТРЫ */}
         <div className="events-filters">
-
-          {/* ПОИСК */}
           <input
             type="text"
-            placeholder="Поиск мероприятия..."
+            placeholder="Поиск по названию..."
             className="events-search-input"
             value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
+            onChange={(e) => setSearch(e.target.value)}
           />
 
-          {/* УРОВЕНЬ */}
-          <select
-            className="events-filter-select"
-            value={levelFilter}
-            onChange={(e) =>
-              setLevelFilter(e.target.value)
-            }
-          >
-            <option value="">
-              Все уровни
-            </option>
-
-            {uniqueLevels.map(level => (
-              <option
-                key={level}
-                value={level}
-              >
-                {level}
-              </option>
+          <select className="events-filter-select" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+            <option value="">Все уровни</option>
+            {uniqueLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
             ))}
           </select>
 
-          {/* ТИП */}
-          <select
-            className="events-filter-select"
-            value={typeFilter}
-            onChange={(e) =>
-              setTypeFilter(e.target.value)
-            }
-          >
-            <option value="">
-              Все типы
-            </option>
-
-            {uniqueTypes.map(type => (
-              <option
-                key={type}
-                value={type}
-              >
-                {type}
-              </option>
+          <select className="events-filter-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="">Все типы</option>
+            {typeOptions.map((typeName) => (
+              <option key={typeName} value={typeName}>{typeName}</option>
             ))}
           </select>
 
-          {/* ДАТА */}
+          <span className="events-filter-period-label">Период:</span>
           <input
             type="date"
             className="events-filter-date"
-            value={dateFilter}
-            onChange={(e) =>
-              setDateFilter(e.target.value)
-            }
+            aria-label="Дата с"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <span className="events-filter-period-dash">—</span>
+          <input
+            type="date"
+            className="events-filter-date"
+            aria-label="Дата по"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
           />
 
-          {/* СБРОС */}
           <button
+            type="button"
             className="events-reset-filters"
             onClick={() => {
               setSearch('');
               setLevelFilter('');
               setTypeFilter('');
-              setDateFilter('');
+              setDateFrom('');
+              setDateTo('');
             }}
           >
             Сбросить
           </button>
-
         </div>
       </div>
 
-      {/* СПИСОК МЕРОПРИЯТИЙ */}
       <div className="events-grid">
         {filteredEvents.length > 0 ? (
           filteredEvents.map((event) => (
@@ -295,94 +227,66 @@ export function EventsListPage() {
               onClick={() => setSelectedEvent(event)}
               style={{ cursor: 'pointer' }}
             >
-
-              {/* КНОПКИ */}
               <div className="event-actions">
-                <button
-                  className="action-btn edit-btn"
-                  title="Отредактировать"
-                  onClick={(e) =>
-                    goToEdit(event.event_id, e)
-                  }
-                >
+                <button type="button" className="action-btn edit-btn" title="Отредактировать" onClick={(e) => goToEdit(event.event_id, e)}>
                   ✎
                 </button>
-                <button
-                  className="action-btn delete-btn"
-                  title="Удалить мероприятие"
-                  onClick={(e) =>
-                    deleteEvent(event.event_id, e)
-                  }
-                >
+                <button type="button" className="action-btn delete-btn" title="Удалить мероприятие" onClick={(e) => deleteEvent(event.event_id, e)}>
                   ×
                 </button>
               </div>
 
-              {/* HEADER */}
               <div className="event-card-header">
-                <span className="event-card-name">
-                  {event.event_name}
-                </span>
+                <span className="event-card-name">{event.event_name}</span>
               </div>
 
-              {/* BODY */}
               <div className="event-card-body">
+                <div className="event-card-meta">
+                  <span className="event-card-level" title="Уровень">{event.event_level}</span>
+                  {event.event_type_name ? (
+                    <span className="event-card-type" title="Тип мероприятия">{event.event_type_name}</span>
+                  ) : (
+                    <span className="event-card-type event-card-type--muted">Тип не указан</span>
+                  )}
+                </div>
                 <div className="event-card-info">
                   <span className="event-card-datetime">
-                  {formatDate(event.start_date)}
-                  {event.end_date && (
-                    <>
-                      {' — '}
-                      {formatDate(event.end_date)}
-                    </>
-                  )}
-                  <br />
-
-                  {formatEventScheduleSummary(event) || (
-                    <>
-                      {formatTime(event.start_time)}
-                      {event.end_time && (
-                        <>
-                          {' - '}
-                          {formatTime(event.end_time)}
-                        </>
-                      )}
-                    </>
-                  )}
-                </span>
+                    {formatDate(event.start_date)}
+                    {event.end_date && (
+                      <>
+                        {' — '}
+                        {formatDate(event.end_date)}
+                      </>
+                    )}
+                    <br />
+                    {formatEventScheduleSummary(event) || (
+                      <>
+                        {formatTime(event.start_time)}
+                        {event.end_time && (
+                          <>
+                            {' - '}
+                            {formatTime(event.end_time)}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </span>
                   <div className="event-card-participants">
-                    <span className="participants-label">
-                      Кол. участников
-                    </span>
-
-                    <div className="participants-badge">
-                      {event.participants_count || 0}
-                    </div>
+                    <span className="participants-label">Кол. участников</span>
+                    <div className="participants-badge">{event.participants_count || 0}</div>
                   </div>
                 </div>
               </div>
             </div>
-
           ))
-
         ) : (
-
-          <div className="empty-state">
-            Ничего не найдено
-          </div>
-
+          <div className="empty-state">Ничего не найдено</div>
         )}
-
       </div>
 
-      {/* МОДАЛКА */}
       {selectedEvent && (
-        <EventViewModal
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-        />
+        <EventViewModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
       )}
-
     </div>
   );
 }

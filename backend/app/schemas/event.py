@@ -79,5 +79,7 @@ class EventRead(BaseModel):
     event_comment: str | None
     event_daily_schedule: list[EventDayScheduleRow] | None = None
 
+    event_type_name: str | None = None
+
     created_at: datetime
 
