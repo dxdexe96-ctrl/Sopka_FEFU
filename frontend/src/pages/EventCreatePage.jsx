@@ -3,8 +3,8 @@ import { createEvent, createEventParticipant, listStudents, listEventTypes, crea
 import { ParticipantCard } from '../components/EventParticipantFields.jsx';
 import { EventDayScheduleEditor } from '../components/EventDayScheduleEditor.jsx';
 import {
-  buildParticipantNotes,
   getParticipantValidationMessages,
+  participantTimeSlotsToApi,
   resolveParticipantStudentId,
 } from '../lib/participantUtils.js';
 import {
@@ -332,7 +332,8 @@ export function EventCreatePage() {
           student_id: studentId,
           role_name: participant.role || 'Участник',
           participation_status: 'planned',
-          notes: buildParticipantNotes(participant),
+          notes: null,
+          time_slots: participantTimeSlotsToApi(participant),
         });
       }
 

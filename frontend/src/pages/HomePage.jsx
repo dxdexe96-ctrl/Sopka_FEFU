@@ -11,11 +11,16 @@ const eventActions = [
   { id: 'events-list', label: 'Посмотреть список мероприятий', href: '#events-list' },
 ];
 
+const reportActions = [
+  { id: 'participants-summary', label: 'Сводная таблица по участникам', href: '#participants-summary' },
+];
+
 export function HomePage() {
-    return (
+  return (
     <div className="home-page">
       <ActionPanel title="Работа с участниками СОПКи" actions={actions} />
       <ActionPanel title="Работа с мероприятиями" actions={eventActions} />
+      <ActionPanel title="Отчёты" actions={reportActions} />
     </div>
-    );
+  );
 }

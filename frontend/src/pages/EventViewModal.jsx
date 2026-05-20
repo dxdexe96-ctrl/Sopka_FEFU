@@ -5,10 +5,26 @@ import {
   formatRuDateShort,
   formatTimeDisplay,
 } from '../lib/eventScheduleUtils.js';
+import '../components/EventParticipantFields.css';
 import './EventCreatePage.css';
 
 function getStudentName(student) {
   return [student?.last_name, student?.first_name, student?.middle_name].filter(Boolean).join(' ');
+}
+
+function getTimeSlotsText(timeSlots) {
+  const parts = (timeSlots || [])
+    .map((slot) => {
+      const date = formatRuDateShort(slot.participation_date);
+      const start = formatTimeDisplay(slot.start_time);
+      const end = formatTimeDisplay(slot.end_time);
+      const hours = Number(slot.participation_hours || 0);
+      const hoursText = hours > 0 ? `, ${hours.toLocaleString('ru-RU')} ч.` : '';
+      return date && start && end ? `${date}: ${start}–${end}${hoursText}` : '';
+    })
+    .filter(Boolean);
+
+  return parts.join('; ');
 }
 
 export function EventViewModal({ event, onClose }) {
@@ -184,6 +200,7 @@ export function EventViewModal({ event, onClose }) {
                   ) : (
                     participants.map((participant) => {
                       const student = studentsById[participant.student_id];
+                      const timeSlotsText = getTimeSlotsText(participant.time_slots);
                       return (
                         <div className="participant-card" key={participant.participation_id}>
                           <div className="participant-card__main">
@@ -191,9 +208,9 @@ export function EventViewModal({ event, onClose }) {
                             <input className="participant-card__role" value={participant.role_name} readOnly />
                             <input className="participant-card__phone" value={formatPhone(student?.phone) || '—'} readOnly />
                           </div>
-                          {participant.notes ? (
+                          {timeSlotsText || participant.notes ? (
                             <div className="participant-card__time">
-                              <span className="participant-card__duration-text">{participant.notes}</span>
+                              <span className="participant-card__duration-text">{timeSlotsText || participant.notes}</span>
                             </div>
                           ) : null}
                         </div>

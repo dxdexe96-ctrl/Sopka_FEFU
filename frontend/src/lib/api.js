@@ -215,6 +215,35 @@ export async function getEventType(eventTypeId) {
   return request(`/event-types/${eventTypeId}`);
 }
 
+export async function getParticipantsSummaryReport({
+  search = '',
+  dateFrom = '',
+  dateTo = '',
+  eventLevel = '',
+  eventTypeId = '',
+} = {}) {
+  const params = new URLSearchParams();
+
+  if (search) {
+    params.set('search', search);
+  }
+  if (dateFrom) {
+    params.set('date_from', dateFrom);
+  }
+  if (dateTo) {
+    params.set('date_to', dateTo);
+  }
+  if (eventLevel) {
+    params.set('event_level', eventLevel);
+  }
+  if (eventTypeId) {
+    params.set('event_type_id', String(eventTypeId));
+  }
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return request(`/reports/participants-summary${suffix}`);
+}
+
 export { API_BASE_URL };
 
 

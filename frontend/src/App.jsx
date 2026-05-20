@@ -5,6 +5,7 @@ import { ParticipantEditPage } from './pages/ParticipantEditPage.jsx';
 import { ParticipantImportPage } from './pages/ParticipantImportPage.jsx';
 import { ParticipantRegistrationPage } from './pages/ParticipantRegistrationPage.jsx';
 import { ParticipantsDatabasePage } from './pages/ParticipantsDatabasePage.jsx';
+import { ParticipantsSummaryPage } from './pages/ParticipantsSummaryPage.jsx';
 import { EventCreatePage } from './pages/EventCreatePage.jsx';
 import { EventsListPage } from './pages/EventsListPage.jsx';
 import { EventEditPage } from './pages/EventEditPage.jsx';
@@ -64,6 +65,7 @@ export default function App() {
     route === 'create' ||
     route === 'database' ||
     route === 'import' ||
+    route === 'participants-summary' ||
     route === 'create-event' ||
     route === 'events-list' ||
     isEditEventPage ||
@@ -76,6 +78,7 @@ export default function App() {
         {route === 'create' ? <ParticipantRegistrationPage /> : null}
         {route === 'import' ? <ParticipantImportPage /> : null}
         {route === 'database' ? <ParticipantsDatabasePage /> : null}
+        {route === 'participants-summary' ? <ParticipantsSummaryPage /> : null}
         {isEditParticipantPage ? <ParticipantEditPage studentId={participantEditId} /> : null}
 
         {route === 'events-list' ? <EventsListPage /> : null}
@@ -85,6 +88,7 @@ export default function App() {
         {route !== 'create' &&
         route !== 'import' &&
         route !== 'database' &&
+        route !== 'participants-summary' &&
         route !== 'create-event' &&
         route !== 'events-list' &&
         route !== 'edit-event' &&

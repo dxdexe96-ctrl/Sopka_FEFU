@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatPhone, normalizePhoneDigits, roleOptions } from '../lib/participantUtils.js';
+import './EventParticipantFields.css';
 
 export function StudentNameInput({ value, studentsList, onSelectStudent, onChange, readOnly = false }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -78,14 +79,16 @@ export function StudentNameInput({ value, studentsList, onSelectStudent, onChang
   );
 }
 
-function TimeSlotInput({ slot, onChange, onRemove }) {
+function TimeSlotInput({ slot, onChange, onRemove, readOnly = false }) {
   return (
     <div className="time-slot-input">
-      <input type="date" className="time-slot-input__date" value={slot.date} onChange={(e) => onChange('date', e.target.value)} />
-      <input type="time" className="time-slot-input__time" value={slot.start} onChange={(e) => onChange('start', e.target.value)} />
+      <input type="date" className="time-slot-input__date" value={slot.date} onChange={(e) => onChange('date', e.target.value)} readOnly={readOnly} />
+      <input type="time" className="time-slot-input__time" value={slot.start} onChange={(e) => onChange('start', e.target.value)} readOnly={readOnly} />
       <span className="time-slot-input__separator">-</span>
-      <input type="time" className="time-slot-input__time" value={slot.end} onChange={(e) => onChange('end', e.target.value)} />
-      <button type="button" className="time-slot-input__remove" onClick={onRemove}>✕</button>
+      <input type="time" className="time-slot-input__time" value={slot.end} onChange={(e) => onChange('end', e.target.value)} readOnly={readOnly} />
+      {!readOnly ? (
+        <button type="button" className="time-slot-input__remove" onClick={onRemove}>✕</button>
+      ) : null}
     </div>
   );
 }
@@ -102,7 +105,7 @@ export function ParticipantCard({
   readOnly = false,
   showTimeSlots = true,
 }) {
-  const totalDuration = participant.timeSlots.reduce((sum, slot) => {
+  const totalDuration = (participant.timeSlots || []).reduce((sum, slot) => {
     if (slot.start && slot.end) {
       const [sh, sm] = slot.start.split(':').map(Number);
       const [eh, em] = slot.end.split(':').map(Number);
@@ -170,20 +173,25 @@ export function ParticipantCard({
               <span className="participant-card__duration-text">{durationHours} ч.</span>
             </div>
             <div className="participant-card__slots">
-              {participant.timeSlots.map((slot, slotIdx) => (
+              {(participant.timeSlots || []).map((slot, slotIdx) => (
                 <TimeSlotInput
                   key={slotIdx}
                   slot={slot}
                   onChange={(field, value) => onUpdateTimeSlot(index, slotIdx, field, value)}
                   onRemove={() => onRemoveTimeSlot(index, slotIdx)}
+                  readOnly={readOnly}
                 />
               ))}
-              <button type="button" className="participant-card__add-time" onClick={() => onAddTimeSlot(index)}>+</button>
+              {!readOnly ? (
+                <button type="button" className="participant-card__add-time" onClick={() => onAddTimeSlot(index)}>+</button>
+              ) : null}
             </div>
           </div>
         )}
       </div>
-      <button type="button" className="participant-card__remove-outside" onClick={() => onRemove(index)}>−</button>
+      {!readOnly ? (
+        <button type="button" className="participant-card__remove-outside" onClick={() => onRemove(index)}>−</button>
+      ) : null}
     </div>
   );
 }

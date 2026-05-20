@@ -12,10 +12,11 @@ import {
 import { ParticipantCard } from '../components/EventParticipantFields.jsx';
 import { EventDayScheduleEditor } from '../components/EventDayScheduleEditor.jsx';
 import {
-  buildParticipantNotes,
+  apiTimeSlotsToParticipant,
   getParticipantValidationMessages,
   getStudentFullName,
   normalizePhoneDigits,
+  participantTimeSlotsToApi,
   resolveParticipantStudentId,
 } from '../lib/participantUtils.js';
 import {
@@ -267,7 +268,7 @@ export function EventEditPage() {
               phone: student?.phone ? normalizePhoneDigits(student.phone) : '',
               student_id: participant.student_id,
               isPersisted: true,
-              timeSlots: [],
+              timeSlots: apiTimeSlotsToParticipant(participant.time_slots),
             };
           }),
         );
@@ -441,7 +442,8 @@ export function EventEditPage() {
           student_id: studentId,
           role_name: participant.role || 'Участник',
           participation_status: 'planned',
-          notes: buildParticipantNotes(participant),
+          notes: null,
+          time_slots: participantTimeSlotsToApi(participant),
         });
 
         const student = updatedStudentsCache.find((item) => item.student_id === studentId);
@@ -567,7 +569,7 @@ export function EventEditPage() {
                       index={idx}
                       studentsList={studentsCache}
                       readOnly={participant.isPersisted}
-                      showTimeSlots={!participant.isPersisted}
+                      showTimeSlots
                       onRemove={handleRemoveParticipant}
                       onAddTimeSlot={addTimeSlot}
                       onRemoveTimeSlot={removeTimeSlot}

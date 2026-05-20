@@ -7,6 +7,8 @@ import {
 } from '../lib/api.js';
 
 import './EventsListPage.css';
+import { FilterBar } from '../components/ui/FilterBar.jsx';
+import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { formatEventScheduleSummary } from '../lib/eventScheduleUtils.js';
 import { EventViewModal } from './EventViewModal';
 
@@ -145,77 +147,43 @@ export function EventsListPage() {
   return (
     <div className="events-list-page">
       <div className="events-list-header">
-        <div className="top-navigation">
-          <button type="button" className="back-home-button" onClick={() => { window.location.hash = ''; }}>
-            ← На главную
-          </button>
-        </div>
+        <PageHeader
+          title="Мероприятия"
+          backLabel="← На главную"
+          onBack={() => { window.location.hash = ''; }}
+          variant="events"
+          actions={(
+            <>
+              <button type="button" className="add-event-button" onClick={() => { window.location.hash = 'create-event'; }}>
+                Добавить мероприятие
+              </button>
+              <div className="events-total-count">Найдено: {filteredEvents.length}</div>
+            </>
+          )}
+        />
 
-        <div className="header-main-row">
-          <h1 className="events-list-title">Мероприятия</h1>
-
-          <div className="events-list-controls">
-            <button type="button" className="add-event-button" onClick={() => { window.location.hash = 'create-event'; }}>
-              Добавить мероприятие
-            </button>
-            <div className="events-total-count">Найдено: {filteredEvents.length}</div>
-          </div>
-        </div>
-
-        <div className="events-filters">
-          <input
-            type="text"
-            placeholder="Поиск по названию..."
-            className="events-search-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-
-          <select className="events-filter-select" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
-            <option value="">Все уровни</option>
-            {uniqueLevels.map((level) => (
-              <option key={level} value={level}>{level}</option>
-            ))}
-          </select>
-
-          <select className="events-filter-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="">Все типы</option>
-            {typeOptions.map((typeName) => (
-              <option key={typeName} value={typeName}>{typeName}</option>
-            ))}
-          </select>
-
-          <span className="events-filter-period-label">Период:</span>
-          <input
-            type="date"
-            className="events-filter-date"
-            aria-label="Дата с"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
-          <span className="events-filter-period-dash">—</span>
-          <input
-            type="date"
-            className="events-filter-date"
-            aria-label="Дата по"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-          />
-
-          <button
-            type="button"
-            className="events-reset-filters"
-            onClick={() => {
+        <FilterBar
+          searchValue={search}
+          searchPlaceholder="Поиск по названию..."
+          onSearchChange={setSearch}
+          levelValue={levelFilter}
+          levelOptions={uniqueLevels}
+          onLevelChange={setLevelFilter}
+          typeValue={typeFilter}
+          typeOptions={typeOptions}
+          onTypeChange={setTypeFilter}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          onReset={() => {
               setSearch('');
               setLevelFilter('');
               setTypeFilter('');
               setDateFrom('');
               setDateTo('');
             }}
-          >
-            Сбросить
-          </button>
-        </div>
+        />
       </div>
 
       <div className="events-grid">
