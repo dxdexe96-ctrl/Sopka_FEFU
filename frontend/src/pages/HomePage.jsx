@@ -13,6 +13,7 @@ const eventActions = [
 
 const reportActions = [
   { id: 'participants-summary', label: 'Сводная таблица по участникам', href: '#participants-summary' },
+  { id: 'student-events', label: 'Участие студента в мероприятиях', href: '#student-events' },
 ];
 
 export function HomePage() {
