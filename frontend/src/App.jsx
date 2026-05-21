@@ -6,6 +6,7 @@ import { ParticipantImportPage } from './pages/ParticipantImportPage.jsx';
 import { ParticipantRegistrationPage } from './pages/ParticipantRegistrationPage.jsx';
 import { ParticipantsDatabasePage } from './pages/ParticipantsDatabasePage.jsx';
 import { ParticipantsSummaryPage } from './pages/ParticipantsSummaryPage.jsx';
+import { StudentEventsPage } from './pages/StudentEventsPage.jsx';
 import { EventCreatePage } from './pages/EventCreatePage.jsx';
 import { EventsListPage } from './pages/EventsListPage.jsx';
 import { EventEditPage } from './pages/EventEditPage.jsx';
@@ -22,7 +23,6 @@ function getRouteFromHash() {
   return parseHash().path;
 }
 
-/** ID участника для страницы редактирования (не путать с edit-event). */
 function getParticipantEditId() {
   const { path, params } = parseHash();
   if (path === 'edit-event' || path.startsWith('edit-event')) {
@@ -58,8 +58,10 @@ export default function App() {
   }, []);
 
   const participantEditId = getParticipantEditId();
+  
   const isEditParticipantPage = Boolean(participantEditId);
   const isEditEventPage = route === 'edit-event';
+  const isStudentEventsPage = route === 'student-events';
 
   const isWidePage =
     route === 'create' ||
@@ -69,7 +71,8 @@ export default function App() {
     route === 'create-event' ||
     route === 'events-list' ||
     isEditEventPage ||
-    isEditParticipantPage;
+    isEditParticipantPage ||
+    isStudentEventsPage;
 
   return (
     <div className="app-shell">
@@ -80,10 +83,12 @@ export default function App() {
         {route === 'database' ? <ParticipantsDatabasePage /> : null}
         {route === 'participants-summary' ? <ParticipantsSummaryPage /> : null}
         {isEditParticipantPage ? <ParticipantEditPage studentId={participantEditId} /> : null}
-
+        
         {route === 'events-list' ? <EventsListPage /> : null}
         {route === 'create-event' ? <EventCreatePage /> : null}
         {isEditEventPage ? <EventEditPage /> : null}
+        
+        {isStudentEventsPage ? <StudentEventsPage /> : null}
 
         {route !== 'create' &&
         route !== 'import' &&
@@ -92,6 +97,7 @@ export default function App() {
         route !== 'create-event' &&
         route !== 'events-list' &&
         route !== 'edit-event' &&
+        route !== 'student-events' &&
         !isEditParticipantPage ? (
           <HomePage />
         ) : null}
