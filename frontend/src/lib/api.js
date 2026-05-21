@@ -244,6 +244,26 @@ export async function getParticipantsSummaryReport({
   return request(`/reports/participants-summary${suffix}`);
 }
 
+export async function getStudentEventsReport({
+  search = '',
+  dateFrom = '',
+  dateTo = '',
+} = {}) {
+  const params = new URLSearchParams();
+
+  if (search) {
+    params.set('search', search);
+  }
+  if (dateFrom) {
+    params.set('date_from', dateFrom);
+  }
+  if (dateTo) {
+    params.set('date_to', dateTo);
+  }
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return request(`/reports/student-events${suffix}`);
+}
 export { API_BASE_URL };
 
 
