@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -18,13 +18,206 @@ from app.schemas.reports import (
     ParticipantSummaryEvent,
     ParticipantSummaryRow,
     ParticipantsSummaryReport,
+    StudentEventRow,
+    StudentEventsReport,
+    StudentSearchMatch,
 )
+from app.services.student_lookup import find_student_by_phone, normalize_phone
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
+STUDENT_SEARCH_LIMIT = 30
+
+
 def _student_full_name(last_name: str, first_name: str, middle_name: str | None) -> str:
     return " ".join(part for part in (last_name, first_name, middle_name) if part)
+
+
+def _student_to_match(student: Student) -> StudentSearchMatch:
+    return StudentSearchMatch(
+        student_id=student.student_id,
+        full_name=_student_full_name(student.last_name, student.first_name, student.middle_name),
+        phone=student.phone,
+    )
+
+
+def _is_phone_search(search: str) -> bool:
+    digits = "".join(char for char in search if char.isdigit())
+    return len(digits) >= 10
+
+
+async def _find_students_by_name(session: AsyncSession, search: str) -> list[Student]:
+    query = search.strip()
+    if not query:
+        return []
+
+    parts = [part for part in query.split() if part]
+    if not parts:
+        return []
+
+    full_name_expr = func.trim(
+        func.concat(
+            Student.last_name,
+            " ",
+            Student.first_name,
+            " ",
+            func.coalesce(Student.middle_name, ""),
+        )
+    )
+    conditions = [full_name_expr.ilike(f"%{query}%")]
+
+    part_filters = []
+    for part in parts:
+        term = f"%{part}%"
+        part_filters.append(
+            or_(
+                Student.last_name.ilike(term),
+                Student.first_name.ilike(term),
+                Student.middle_name.ilike(term),
+            )
+        )
+    if part_filters:
+        conditions.append(and_(*part_filters))
+
+    stmt = (
+        select(Student)
+        .where(or_(*conditions))
+        .order_by(Student.last_name, Student.first_name, Student.middle_name, Student.student_id)
+        .limit(STUDENT_SEARCH_LIMIT)
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def _resolve_student_for_search(
+    session: AsyncSession,
+    *,
+    search: str | None,
+    student_id: int | None,
+) -> tuple[Student | None, list[StudentSearchMatch]]:
+    if student_id is not None:
+        student = await session.get(Student, student_id)
+        if student is None:
+            return None, []
+        return student, []
+
+    if not search or not search.strip():
+        return None, []
+
+    query = search.strip()
+    if _is_phone_search(query):
+        digits = "".join(char for char in query if char.isdigit())
+        student = await find_student_by_phone(session, normalize_phone(int(digits)))
+        return student, []
+
+    students = await _find_students_by_name(session, query)
+    if not students:
+        return None, []
+    if len(students) == 1:
+        return students[0], []
+
+    return None, [_student_to_match(item) for item in students]
+
+
+async def _build_student_events_report(
+    session: AsyncSession,
+    student: Student,
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    event_level: str | None,
+    event_type_id: int | None,
+) -> StudentEventsReport:
+    slot_filters = []
+    if date_from:
+        slot_filters.append(EventParticipationTimeSlot.participation_date >= date_from)
+    if date_to:
+        slot_filters.append(EventParticipationTimeSlot.participation_date <= date_to)
+
+    slot_hours = func.coalesce(EventParticipationTimeSlot.participation_hours, 0)
+    if slot_filters:
+        slot_match = and_(*slot_filters)
+        hours_expr = case((slot_match, slot_hours), else_=0)
+        event_date_expr = func.min(case((slot_match, EventParticipationTimeSlot.participation_date)))
+    else:
+        hours_expr = slot_hours
+        event_date_expr = func.min(EventParticipationTimeSlot.participation_date)
+
+    event_filters = [EventParticipation.student_id == student.student_id]
+    if date_from:
+        event_filters.append(func.coalesce(Event.end_date, Event.start_date) >= date_from)
+    if date_to:
+        event_filters.append(Event.start_date <= date_to)
+    if event_level:
+        event_filters.append(Event.event_level == event_level)
+    if event_type_id:
+        event_filters.append(Event.event_type_id == event_type_id)
+
+    participation_stmt = (
+        select(
+            Event.event_id,
+            Event.event_name,
+            Event.start_date,
+            Event.end_date,
+            Event.event_level,
+            EventType.event_type_name,
+            EventParticipation.role_name,
+            func.coalesce(func.sum(hours_expr), 0).label("hours"),
+            event_date_expr.label("participation_date"),
+        )
+        .select_from(EventParticipation)
+        .join(Event, Event.event_id == EventParticipation.event_id)
+        .outerjoin(EventType, Event.event_type_id == EventType.event_type_id)
+        .outerjoin(
+            EventParticipationTimeSlot,
+            EventParticipationTimeSlot.participation_id == EventParticipation.participation_id,
+        )
+        .where(*event_filters)
+        .group_by(
+            Event.event_id,
+            Event.event_name,
+            Event.start_date,
+            Event.end_date,
+            Event.event_level,
+            EventType.event_type_name,
+            EventParticipation.participation_id,
+            EventParticipation.role_name,
+        )
+        .order_by(Event.start_date, Event.event_name, Event.event_id)
+    )
+    participation_result = await session.execute(participation_stmt)
+
+    events: list[StudentEventRow] = []
+    total_hours = Decimal("0")
+    for row in participation_result.all():
+        hours = Decimal(str(row.hours or 0))
+        if hours <= 0 and slot_filters:
+            continue
+
+        total_hours += hours
+        event_date = row.participation_date or row.start_date
+        events.append(
+            StudentEventRow(
+                event_id=row.event_id,
+                event_name=row.event_name,
+                event_date=event_date,
+                role=row.role_name,
+                hours=hours,
+                event_level=row.event_level,
+                event_type=row.event_type_name,
+            )
+        )
+
+    return StudentEventsReport(
+        student_id=student.student_id,
+        full_name=_student_full_name(student.last_name, student.first_name, student.middle_name),
+        phone=student.phone,
+        total_hours=total_hours,
+        total_events=len(events),
+        events=events,
+        matches=[],
+    )
 
 
 @router.get("/participants-summary", response_model=ParticipantsSummaryReport)
@@ -171,4 +364,42 @@ async def get_participants_summary(
         event_count=len(events),
         events=events,
         rows=report_rows,
+    )
+
+
+@router.get("/student-events", response_model=StudentEventsReport)
+async def get_student_events(
+    session: AsyncSession = Depends(get_session),
+    search: str | None = Query(None, max_length=200),
+    student_id: int | None = Query(None, ge=1),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    event_level: str | None = Query(None, max_length=50),
+    event_type_id: int | None = Query(None, ge=1),
+) -> StudentEventsReport:
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="Дата начала периода не может быть позже даты окончания.")
+
+    if not search and student_id is None:
+        return StudentEventsReport()
+
+    student, matches = await _resolve_student_for_search(
+        session,
+        search=search,
+        student_id=student_id,
+    )
+
+    if matches:
+        return StudentEventsReport(matches=matches)
+
+    if student is None:
+        return StudentEventsReport()
+
+    return await _build_student_events_report(
+        session,
+        student,
+        date_from=date_from,
+        date_to=date_to,
+        event_level=event_level,
+        event_type_id=event_type_id,
     )

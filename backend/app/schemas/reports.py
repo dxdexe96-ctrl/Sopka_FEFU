@@ -35,3 +35,29 @@ class ParticipantsSummaryReport(BaseModel):
     event_count: int
     events: list[ParticipantSummaryEvent]
     rows: list[ParticipantSummaryRow]
+
+
+class StudentEventRow(BaseModel):
+    event_id: int
+    event_name: str
+    event_date: date | None
+    role: str
+    hours: Decimal
+    event_level: str
+    event_type: str | None = None
+
+
+class StudentSearchMatch(BaseModel):
+    student_id: int
+    full_name: str
+    phone: int | None = None
+
+
+class StudentEventsReport(BaseModel):
+    student_id: int | None = None
+    full_name: str = ""
+    phone: int | None = None
+    total_hours: Decimal = Decimal("0")
+    total_events: int = 0
+    events: list[StudentEventRow] = []
+    matches: list[StudentSearchMatch] = []

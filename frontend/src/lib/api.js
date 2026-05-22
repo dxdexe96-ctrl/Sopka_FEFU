@@ -246,19 +246,31 @@ export async function getParticipantsSummaryReport({
 
 export async function getStudentEventsReport({
   search = '',
+  studentId = '',
   dateFrom = '',
   dateTo = '',
+  eventLevel = '',
+  eventTypeId = '',
 } = {}) {
   const params = new URLSearchParams();
 
   if (search) {
     params.set('search', search);
   }
+  if (studentId) {
+    params.set('student_id', String(studentId));
+  }
   if (dateFrom) {
     params.set('date_from', dateFrom);
   }
   if (dateTo) {
     params.set('date_to', dateTo);
+  }
+  if (eventLevel) {
+    params.set('event_level', eventLevel);
+  }
+  if (eventTypeId) {
+    params.set('event_type_id', String(eventTypeId));
   }
 
   const suffix = params.toString() ? `?${params.toString()}` : '';

@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react';
+import { FilterBar } from '../components/ui/FilterBar.jsx';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
-import { getStudentEventsReport } from '../lib/api.js';
+import { getEvent, getStudentEventsReport, listEventTypes } from '../lib/api.js';
+import { EventViewModal } from './EventViewModal';
 import './StudentEventsPage.css';
+
+const eventLevelOptions = [
+  'Всероссийский',
+  'Региональный',
+  'Городской',
+  'Университетский',
+  'Институтский',
+];
 
 const emptyReport = {
   full_name: '',
-  phone: '',
+  phone: null,
   total_hours: 0,
   total_events: 0,
   events: [],
+  matches: [],
 };
 
 function formatPhone(value) {
@@ -29,62 +40,50 @@ function formatHours(value) {
 
 function formatDate(value) {
   if (!value) {
-    return '';
+    return '—';
   }
   return new Date(`${String(value).slice(0, 10)}T12:00:00`).toLocaleDateString('ru-RU');
 }
 
-function getEventRoleLabel(role) {
-  const roleMap = {
-    participant: 'Участник',
-    volunteer: 'Волонтёр',
-    organizer: 'Организатор',
-    speaker: 'Спикер',
-    expert: 'Эксперт',
-    guest: 'Гость',
-  };
-  return roleMap[role] || role || '—';
-}
-
-function getEventLevelLabel(level) {
-  const levelMap = {
-    international: 'Международный',
-    national: 'Всероссийский',
-    regional: 'Региональный',
-    city: 'Городской',
-    university: 'Университетский',
-    institute: 'Институтский',
-  };
-  return levelMap[level] || level || '—';
-}
-
-function getEventTypeLabel(type) {
-  const typeMap = {
-    conference: 'Конференция',
-    hackathon: 'Хакатон',
-    seminar: 'Семинар',
-    workshop: 'Воркшоп',
-    lecture: 'Лекция',
-    competition: 'Соревнование',
-    other: 'Другое',
-  };
-  return typeMap[type] || type || '—';
-}
-
 export function StudentEventsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [filters, setFilters] = useState({
+    search: '',
     dateFrom: '',
     dateTo: '',
+    eventLevel: '',
+    eventTypeId: '',
   });
+  const [selectedStudentId, setSelectedStudentId] = useState('');
   const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [appliedStudentId, setAppliedStudentId] = useState('');
+  const [eventTypes, setEventTypes] = useState([]);
   const [report, setReport] = useState(emptyReport);
   const [status, setStatus] = useState({ type: 'idle', message: '' });
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [loadingEventId, setLoadingEventId] = useState(null);
 
-  // Загрузка данных при изменении поискового запроса или фильтров
   useEffect(() => {
-    if (!appliedSearchQuery.trim()) {
+    let isMounted = true;
+
+    listEventTypes({ limit: 200, isActive: true })
+      .then((rows) => {
+        if (isMounted) {
+          setEventTypes(rows || []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setEventTypes([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!appliedFilters.search.trim() && !appliedStudentId) {
       setReport(emptyReport);
       setStatus({ type: 'idle', message: '' });
       return;
@@ -94,22 +93,39 @@ export function StudentEventsPage() {
     setStatus({ type: 'loading', message: 'Поиск участника...' });
 
     getStudentEventsReport({
-      search: appliedSearchQuery,
-      dateFrom: appliedFilters.dateFrom,
-      dateTo: appliedFilters.dateTo,
+      ...appliedFilters,
+      studentId: appliedStudentId,
     })
       .then((data) => {
-        if (!isMounted) return;
+        if (!isMounted) {
+          return;
+        }
+
+        const matches = data?.matches || [];
+        if (matches.length > 0) {
+          setReport({ ...emptyReport, matches });
+          setStatus({
+            type: 'idle',
+            message: `Найдено участников: ${matches.length}. Выберите нужного из списка.`,
+          });
+          return;
+        }
+
         if (!data || !data.full_name) {
           setReport(emptyReport);
-          setStatus({ type: 'error', message: 'Участник не найден. Проверьте ФИО или номер телефона.' });
+          setStatus({
+            type: 'error',
+            message: 'Участник не найден. Проверьте ФИО или номер телефона.',
+          });
         } else {
           setReport(data);
           setStatus({ type: 'idle', message: '' });
         }
       })
       .catch((error) => {
-        if (!isMounted) return;
+        if (!isMounted) {
+          return;
+        }
         setReport(emptyReport);
         setStatus({
           type: 'error',
@@ -120,50 +136,68 @@ export function StudentEventsPage() {
     return () => {
       isMounted = false;
     };
-  }, [appliedSearchQuery, appliedFilters]);
+  }, [appliedFilters, appliedStudentId]);
 
-  // Debounce для поиска
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setAppliedSearchQuery(searchQuery);
-    }, 500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [searchQuery]);
-
-  // Debounce для дат
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setAppliedFilters(filters);
+      setAppliedStudentId(selectedStudentId);
     }, 300);
 
     return () => window.clearTimeout(timeoutId);
-  }, [filters]);
+  }, [filters, selectedStudentId]);
 
   function updateFilter(name, value) {
     setFilters((current) => ({ ...current, [name]: value }));
+    if (name === 'search') {
+      setSelectedStudentId('');
+    }
   }
 
   function resetFilters() {
-    setSearchQuery('');
-    setAppliedSearchQuery('');
-    setFilters({
+    const nextFilters = {
+      search: '',
       dateFrom: '',
       dateTo: '',
-    });
-    setAppliedFilters({
-      dateFrom: '',
-      dateTo: '',
-    });
+      eventLevel: '',
+      eventTypeId: '',
+    };
+    setFilters(nextFilters);
+    setAppliedFilters(nextFilters);
+    setSelectedStudentId('');
+    setAppliedStudentId('');
     setReport(emptyReport);
     setStatus({ type: 'idle', message: '' });
   }
 
-  function handleSearch() {
-    setAppliedSearchQuery(searchQuery);
-    setAppliedFilters(filters);
+  function selectStudent(studentId) {
+    setSelectedStudentId(String(studentId));
+    setAppliedStudentId(String(studentId));
   }
 
+  async function openEventView(eventRow) {
+    if (!eventRow?.event_id) {
+      return;
+    }
+
+    setLoadingEventId(eventRow.event_id);
+    try {
+      const event = await getEvent(eventRow.event_id);
+      setSelectedEvent({
+        ...event,
+        event_type_name: eventRow.event_type || event.event_type_name,
+      });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось загрузить данные мероприятия.',
+      });
+    } finally {
+      setLoadingEventId(null);
+    }
+  }
+
+  const hasMatches = report.matches && report.matches.length > 0;
   const hasEvents = report.events && report.events.length > 0;
   const hasData = report.full_name && report.full_name.trim() !== '';
 
@@ -171,47 +205,25 @@ export function StudentEventsPage() {
     <div className="student-events-page">
       <PageHeader title="Участие студента в мероприятиях" />
 
-      <div className="student-events-page__filters">
-        <div className="student-events-page__filters-row">
-          <div className="student-events-page__filter-group student-events-page__filter-group--search">
-            <input
-              type="text"
-              className="student-events-page__filter-input student-events-page__filter-input--search"
-              placeholder="Поиск по ФИО или номеру телефона"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-          </div>
-          <button className="student-events-page__search-btn" onClick={handleSearch}>
-            Поиск
-          </button>
-          <button className="student-events-page__reset-btn" onClick={resetFilters}>
-            Сбросить
-          </button>
-        </div>
-
-        <div className="student-events-page__filters-row">
-          <div className="student-events-page__filter-group">
-            <label className="student-events-page__filter-label">Искать мероприятия с</label>
-            <input
-              type="date"
-              className="student-events-page__filter-input"
-              value={filters.dateFrom}
-              onChange={(e) => updateFilter('dateFrom', e.target.value)}
-            />
-          </div>
-          <div className="student-events-page__filter-group">
-            <label className="student-events-page__filter-label">по</label>
-            <input
-              type="date"
-              className="student-events-page__filter-input"
-              value={filters.dateTo}
-              onChange={(e) => updateFilter('dateTo', e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
+      <FilterBar
+        searchValue={filters.search}
+        searchPlaceholder="Поиск по ФИО или номеру телефона"
+        onSearchChange={(value) => updateFilter('search', value)}
+        levelValue={filters.eventLevel}
+        levelOptions={eventLevelOptions}
+        onLevelChange={(value) => updateFilter('eventLevel', value)}
+        typeValue={filters.eventTypeId}
+        typeOptions={eventTypes.map((eventType) => ({
+          value: String(eventType.event_type_id),
+          label: eventType.event_type_name,
+        }))}
+        onTypeChange={(value) => updateFilter('eventTypeId', value)}
+        dateFrom={filters.dateFrom}
+        dateTo={filters.dateTo}
+        onDateFromChange={(value) => updateFilter('dateFrom', value)}
+        onDateToChange={(value) => updateFilter('dateTo', value)}
+        onReset={resetFilters}
+      />
 
       {status.message ? (
         <p className={`student-events-page__status student-events-page__status--${status.type}`}>
@@ -219,14 +231,35 @@ export function StudentEventsPage() {
         </p>
       ) : null}
 
+      {hasMatches ? (
+        <div className="student-events-page__matches">
+          <h2 className="student-events-page__matches-title">Похожие участники</h2>
+          <ul className="student-events-page__matches-list">
+            {report.matches.map((match) => {
+              const isSelected = String(match.student_id) === String(selectedStudentId);
+              return (
+                <li key={match.student_id}>
+                  <button
+                    type="button"
+                    className={`student-events-page__match-btn${isSelected ? ' student-events-page__match-btn--selected' : ''}`}
+                    onClick={() => selectStudent(match.student_id)}
+                  >
+                    <span className="student-events-page__match-name">{match.full_name}</span>
+                    <span className="student-events-page__match-phone">{formatPhone(match.phone)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
       {hasData && (
         <>
           <div className="student-events-page__info-cards">
-            <div className="student-events-page__info-card">
-              <div className="student-events-page__info-label">
-                {report.full_name}
-                <span className="student-events-page__info-phone"> | {formatPhone(report.phone)}</span>
-              </div>
+            <div className="student-events-page__info-card student-events-page__info-card--student">
+              <div className="student-events-page__info-label">{report.full_name}</div>
+              <div className="student-events-page__info-phone">{formatPhone(report.phone)}</div>
               <div className="student-events-page__info-title">Фамилия Имя Отчество | Номер телефона</div>
             </div>
             <div className="student-events-page__info-card">
@@ -258,13 +291,22 @@ export function StudentEventsPage() {
                 </thead>
                 <tbody>
                   {report.events.map((event, index) => (
-                    <tr key={event.event_id || index}>
-                      <td className="student-events-page__event-name-cell">{event.event_name || '—'}</td>
+                    <tr key={`${event.event_id}-${event.role}-${index}`}>
+                      <td className="student-events-page__event-name-cell">
+                        <button
+                          type="button"
+                          className="student-events-page__event-link"
+                          onClick={() => openEventView(event)}
+                          disabled={loadingEventId === event.event_id}
+                        >
+                          {loadingEventId === event.event_id ? 'Загрузка...' : (event.event_name || '—')}
+                        </button>
+                      </td>
                       <td>{formatDate(event.event_date)}</td>
-                      <td>{getEventRoleLabel(event.role)}</td>
+                      <td>{event.role || '—'}</td>
                       <td className="student-events-page__hours-cell">{formatHours(event.hours)}</td>
-                      <td>{getEventLevelLabel(event.event_level)}</td>
-                      <td>{getEventTypeLabel(event.event_type)}</td>
+                      <td>{event.event_level || '—'}</td>
+                      <td>{event.event_type || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -274,9 +316,13 @@ export function StudentEventsPage() {
         </>
       )}
 
+      {selectedEvent ? (
+        <EventViewModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      ) : null}
+
       <div className="student-events-page__back-link">
         <a href="#home" className="student-events-page__back-link-btn">
-          ← Вернуться к списку участников
+          ← Вернуться к списку отчётов
         </a>
       </div>
     </div>
