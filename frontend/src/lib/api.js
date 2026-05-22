@@ -276,6 +276,49 @@ export async function getStudentEventsReport({
   const suffix = params.toString() ? `?${params.toString()}` : '';
   return request(`/reports/student-events${suffix}`);
 }
+
+export async function downloadStudentSpravka({
+  studentId,
+  eventId,
+  dateFrom = '',
+  dateTo = '',
+} = {}) {
+  const params = new URLSearchParams({
+    student_id: String(studentId),
+    event_id: String(eventId),
+  });
+
+  if (dateFrom) {
+    params.set('date_from', dateFrom);
+  }
+  if (dateTo) {
+    params.set('date_to', dateTo);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/reports/student-events/spravka?${params.toString()}`);
+  if (!response.ok) {
+    let message = 'Не удалось сформировать справку.';
+    try {
+      const payload = await response.json();
+      if (typeof payload?.detail === 'string') {
+        message = payload.detail;
+      }
+    } catch {
+      // Keep fallback message for non-JSON errors.
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  const rawName = utfMatch?.[1] || plainMatch?.[1] || 'Справка.docx';
+  const filename = decodeURIComponent(rawName);
+
+  return { blob, filename };
+}
+
 export { API_BASE_URL };
 
 

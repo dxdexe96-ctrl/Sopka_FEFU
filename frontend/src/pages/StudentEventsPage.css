@@ -90,6 +90,60 @@
   background: #cbd5e1;
 }
 
+.student-events-page__spravka-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+}
+
+.student-events-page__spravka-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.student-events-page__spravka-select-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #33485c;
+}
+
+.student-events-page__spravka-select {
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #ffffff;
+}
+
+.student-events-page__spravka-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #2563eb;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.student-events-page__spravka-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.student-events-page__spravka-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
 /* Информационные карточки */
 .student-events-page__info-cards {
   display: flex;

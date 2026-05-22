@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FilterBar } from '../components/ui/FilterBar.jsx';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
-import { getEvent, getStudentEventsReport, listEventTypes } from '../lib/api.js';
+import { downloadStudentSpravka, getEvent, getStudentEventsReport, listEventTypes } from '../lib/api.js';
 import { EventViewModal } from './EventViewModal';
 import './StudentEventsPage.css';
 
@@ -61,6 +61,8 @@ export function StudentEventsPage() {
   const [status, setStatus] = useState({ type: 'idle', message: '' });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [loadingEventId, setLoadingEventId] = useState(null);
+  const [spravkaEventId, setSpravkaEventId] = useState('');
+  const [spravkaLoading, setSpravkaLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -147,6 +149,14 @@ export function StudentEventsPage() {
     return () => window.clearTimeout(timeoutId);
   }, [filters, selectedStudentId]);
 
+  useEffect(() => {
+    if (report.events?.length === 1) {
+      setSpravkaEventId(String(report.events[0].event_id));
+      return;
+    }
+    setSpravkaEventId('');
+  }, [report.student_id, report.events]);
+
   function updateFilter(name, value) {
     setFilters((current) => ({ ...current, [name]: value }));
     if (name === 'search') {
@@ -173,6 +183,68 @@ export function StudentEventsPage() {
   function selectStudent(studentId) {
     setSelectedStudentId(String(studentId));
     setAppliedStudentId(String(studentId));
+  }
+
+  function triggerSpravkaDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function createSpravka(eventId) {
+    if (!report.student_id || !eventId) {
+      return;
+    }
+
+    setSpravkaLoading(true);
+    setStatus({ type: 'loading', message: 'Формирование справки...' });
+    try {
+      const { blob, filename } = await downloadStudentSpravka({
+        studentId: report.student_id,
+        eventId,
+        dateFrom: appliedFilters.dateFrom,
+        dateTo: appliedFilters.dateTo,
+      });
+      triggerSpravkaDownload(blob, filename);
+      setStatus({ type: 'idle', message: 'Справка сформирована и загружена.' });
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось сформировать справку.',
+      });
+    } finally {
+      setSpravkaLoading(false);
+    }
+  }
+
+  async function handleCreateSpravka() {
+    if (!hasEvents) {
+      setStatus({
+        type: 'error',
+        message: 'Нет мероприятий для формирования справки.',
+      });
+      return;
+    }
+
+    if (report.events.length === 1) {
+      await createSpravka(report.events[0].event_id);
+      return;
+    }
+
+    if (!spravkaEventId) {
+      setStatus({
+        type: 'error',
+        message: 'Выберите мероприятие для справки.',
+      });
+      return;
+    }
+
+    await createSpravka(Number(spravkaEventId));
   }
 
   async function openEventView(eventRow) {
@@ -256,6 +328,35 @@ export function StudentEventsPage() {
 
       {hasData && (
         <>
+          <div className="student-events-page__spravka-bar">
+            {report.events.length > 1 ? (
+              <label className="student-events-page__spravka-select-wrap">
+                <span className="student-events-page__spravka-select-label">Мероприятие для справки</span>
+                <select
+                  className="student-events-page__spravka-select"
+                  value={spravkaEventId}
+                  onChange={(event) => setSpravkaEventId(event.target.value)}
+                  disabled={spravkaLoading}
+                >
+                  <option value="">Выберите мероприятие</option>
+                  {report.events.map((event) => (
+                    <option key={event.event_id} value={String(event.event_id)}>
+                      {event.event_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button
+              type="button"
+              className="student-events-page__spravka-btn"
+              onClick={handleCreateSpravka}
+              disabled={spravkaLoading || !hasEvents}
+            >
+              {spravkaLoading ? 'Формирование...' : 'Создать справку'}
+            </button>
+          </div>
+
           <div className="student-events-page__info-cards">
             <div className="student-events-page__info-card student-events-page__info-card--student">
               <div className="student-events-page__info-label">{report.full_name}</div>

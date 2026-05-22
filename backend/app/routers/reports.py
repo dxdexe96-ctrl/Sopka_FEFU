@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.database import get_session
 from app.models.event import Event
@@ -22,6 +27,8 @@ from app.schemas.reports import (
     StudentEventsReport,
     StudentSearchMatch,
 )
+from app.services.generate_spravka import generate_spravka, make_filename, resolve_template_path
+from app.services.spravka_data import build_spravka_payload
 from app.services.student_lookup import find_student_by_phone, normalize_phone
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -402,4 +409,47 @@ async def get_student_events(
         date_to=date_to,
         event_level=event_level,
         event_type_id=event_type_id,
+    )
+
+
+@router.get("/student-events/spravka")
+async def download_student_spravka(
+    session: AsyncSession = Depends(get_session),
+    student_id: int = Query(..., ge=1),
+    event_id: int = Query(..., ge=1),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+) -> FileResponse:
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="Дата начала периода не может быть позже даты окончания.")
+
+    payload = await build_spravka_payload(
+        session,
+        student_id=student_id,
+        event_id=event_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    try:
+        template_path = resolve_template_path()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    fd, tmp_path = tempfile.mkstemp(suffix=".docx")
+    os.close(fd)
+    output_path = Path(tmp_path)
+
+    try:
+        generate_spravka(payload, template_path, output_path)
+    except Exception as exc:
+        output_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail="Не удалось сформировать справку.") from exc
+
+    filename = make_filename(payload["fio"])
+    return FileResponse(
+        path=output_path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+        background=BackgroundTask(lambda: output_path.unlink(missing_ok=True)),
     )
