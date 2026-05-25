@@ -8,6 +8,7 @@ import {
   listEventTypes,
   listStudents,
   updateEvent,
+  updateEventParticipant,
 } from '../lib/api.js';
 import { ParticipantCard } from '../components/EventParticipantFields.jsx';
 import { EventDayScheduleEditor } from '../components/EventDayScheduleEditor.jsx';
@@ -435,6 +436,14 @@ export function EventEditPage() {
 
       await updateEvent(eventId, payload);
 
+      const persistedParticipants = participants.filter((participant) => participant.isPersisted && participant.participation_id);
+      for (const participant of persistedParticipants) {
+        await updateEventParticipant(eventId, participant.participation_id, {
+          role_name: participant.role || 'Участник',
+          time_slots: participantTimeSlotsToApi(participant),
+        });
+      }
+
       let updatedStudentsCache = [...studentsCache];
       for (const participant of newParticipants) {
         const studentId = await resolveParticipantStudentId(participant, updatedStudentsCache);
@@ -568,7 +577,7 @@ export function EventEditPage() {
                       participant={participant}
                       index={idx}
                       studentsList={studentsCache}
-                      readOnly={participant.isPersisted}
+                      readOnlyIdentity={participant.isPersisted}
                       showTimeSlots
                       onRemove={handleRemoveParticipant}
                       onAddTimeSlot={addTimeSlot}

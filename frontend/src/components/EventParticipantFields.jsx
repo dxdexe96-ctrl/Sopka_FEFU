@@ -103,8 +103,10 @@ export function ParticipantCard({
   onRemoveTimeSlot,
   onUpdateParticipant,
   readOnly = false,
+  readOnlyIdentity = false,
   showTimeSlots = true,
 }) {
+  const identityLocked = readOnly || readOnlyIdentity;
   const totalDuration = (participant.timeSlots || []).reduce((sum, slot) => {
     if (slot.start && slot.end) {
       const [sh, sm] = slot.start.split(':').map(Number);
@@ -123,8 +125,8 @@ export function ParticipantCard({
           <StudentNameInput
             value={participant.fio}
             studentsList={studentsList}
-            readOnly={readOnly}
-            onChange={(val) => onUpdateParticipant(index, { ...participant, fio: val, student_id: readOnly ? participant.student_id : null })}
+            readOnly={identityLocked}
+            onChange={(val) => onUpdateParticipant(index, { ...participant, fio: val, student_id: identityLocked ? participant.student_id : null })}
             onSelectStudent={(data) => {
               onUpdateParticipant(index, {
                 ...participant,
@@ -155,12 +157,12 @@ export function ParticipantCard({
               onUpdateParticipant(index, {
                 ...participant,
                 phone: digits,
-                student_id: readOnly ? participant.student_id : null,
+                student_id: identityLocked ? participant.student_id : null,
               });
             }}
             placeholder="+7 (___) ___-__-__"
             maxLength={18}
-            readOnly={readOnly}
+            readOnly={identityLocked}
           />
         </div>
         {showTimeSlots && (

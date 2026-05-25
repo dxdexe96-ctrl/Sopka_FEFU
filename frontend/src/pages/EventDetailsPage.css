@@ -9,6 +9,10 @@
   margin: 0 auto;
 }
 
+.event-details__container--wide {
+  max-width: 1200px;
+}
+
 .back-link {
   background: none;
   border: none;
@@ -77,7 +81,13 @@
   font-size: 24px;
   font-weight: 600;
   color: #005BAA;
-  margin: 0 0 24px 0;
+  margin: 0 0 12px 0;
+}
+
+.participants-block__hint {
+  margin: 0 0 20px 0;
+  color: #64748b;
+  font-size: 0.9rem;
   padding-bottom: 16px;
   border-bottom: 2px solid #eef2f6;
 }
@@ -270,6 +280,63 @@
   padding: 60px;
   font-size: 16px;
   color: #6c7a8e;
+}
+
+.gantt-block {
+  margin-top: 30px;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.gantt-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.gantt-block__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #005baa;
+}
+
+.gantt-block__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.gantt-block__btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gantt-block__btn--secondary {
+  background: #e8f1fa;
+  color: #005baa;
+}
+
+.gantt-block__btn--danger {
+  background: #fde9e7;
+  color: #8c2f28;
+}
+
+.gantt-block__empty {
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 8px;
 }
 
 /* Мобильная версия */

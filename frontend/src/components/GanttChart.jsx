@@ -14,8 +14,8 @@ const GanttChart = ({ items, groups, startDate, endDate, eventItems }) => {
       timelineRef.current = null;
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = startDate instanceof Date ? new Date(startDate) : new Date(startDate);
+    const end = endDate instanceof Date ? new Date(endDate) : new Date(endDate);
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 

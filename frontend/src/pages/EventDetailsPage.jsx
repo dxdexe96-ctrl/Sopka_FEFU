@@ -1,8 +1,55 @@
-// frontend/src/pages/EventDetailsPage.jsx
 import { useState, useEffect } from 'react';
-import { getEvent, listEventParticipants, updateEventParticipant, listStudents } from '../lib/api';
+import { getEvent, listEventParticipants, listStudents } from '../lib/api';
 import './EventDetailsPage.css';
 import GanttChart from '../components/GanttChart';
+
+function parseDateTime(dateValue, timeValue) {
+  const dateStr = String(dateValue || '').slice(0, 10);
+  const timeStr = String(timeValue || '00:00:00').slice(0, 8);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute, second] = timeStr.split(':').map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day, hour || 0, minute || 0, second || 0);
+}
+
+function getAllParticipants(organizers, executors, volunteers, participants) {
+  return [...organizers, ...executors, ...volunteers, ...participants];
+}
+
+function sumParticipationHours(participant) {
+  const slots = participant.time_slots || [];
+  if (slots.length > 0) {
+    return slots.reduce((sum, slot) => sum + Number(slot.participation_hours || 0), 0);
+  }
+  return Number(participant.hours || participant.duration_hours || 0);
+}
+
+function computeGanttRange(event, items) {
+  let start = parseDateTime(event?.start_date, '00:00:00');
+  let end = parseDateTime(event?.end_date || event?.start_date, '23:59:59');
+
+  items.forEach((item) => {
+    if (item.start && (!start || item.start < start)) {
+      start = new Date(item.start);
+    }
+    if (item.end && (!end || item.end > end)) {
+      end = new Date(item.end);
+    }
+  });
+
+  if (!start || !end) {
+    const now = new Date();
+    return { start: now, end: new Date(now.getTime() + 24 * 60 * 60 * 1000) };
+  }
+
+  if (end <= start) {
+    end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return { start, end };
+}
 
 const EventDetailsPage = ({ eventId }) => {
   const [event, setEvent] = useState(null);
@@ -49,9 +96,6 @@ const EventDetailsPage = ({ eventId }) => {
         listEventParticipants(eventId)
       ]);
 
-      console.log('=== participantsData ===', participantsData);
-      console.log('=== первый участник ===', participantsData[0]);
-
       setEvent(eventData);
 
       const orgs = participantsData.filter(p =>
@@ -75,6 +119,10 @@ const EventDetailsPage = ({ eventId }) => {
       setExecutors(execs);
       setVolunteers(vols);
       setParticipants(parts);
+
+      const allLoaded = getAllParticipants(orgs, execs, vols, parts);
+      setSelectedParticipants(allLoaded.map((item) => item.participation_id));
+      setShowGantt(allLoaded.length > 0);
     } catch (err) {
       console.error('Ошибка:', err);
     } finally {
@@ -93,42 +141,24 @@ const EventDetailsPage = ({ eventId }) => {
     }));
   };
 
-  const handleCheckParticipant = async (participantId, checked) => {
-    try {
-      await updateEventParticipant(eventId, participantId, {
-        is_confirmed: checked
-      });
-
-      const updateList = (list) =>
-        list.map(p =>
-          p.participation_id === participantId
-            ? { ...p, is_confirmed: checked }
-            : p
-        );
-
-      setOrganizers(updateList(organizers));
-      setExecutors(updateList(executors));
-      setVolunteers(updateList(volunteers));
-      setParticipants(updateList(participants));
-    } catch (err) {
-      console.error('Ошибка:', err);
-    }
-  };
-
-  // ========== ФУНКЦИИ ДЛЯ ДИАГРАММЫ ГАНТА ==========
-
   const addToGantt = (participantId) => {
     if (!selectedParticipants.includes(participantId)) {
-      setSelectedParticipants([...selectedParticipants, participantId]);
-      setShowGantt(true);
+      const next = [...selectedParticipants, participantId];
+      setSelectedParticipants(next);
+      setShowGantt(next.length > 0);
     }
   };
 
   const removeFromGantt = (participantId) => {
-    setSelectedParticipants(selectedParticipants.filter(id => id !== participantId));
-    if (selectedParticipants.length === 1) {
-      setShowGantt(false);
-    }
+    const next = selectedParticipants.filter((id) => id !== participantId);
+    setSelectedParticipants(next);
+    setShowGantt(next.length > 0);
+  };
+
+  const addAllToGantt = () => {
+    const all = getAllParticipants(organizers, executors, volunteers, participants);
+    setSelectedParticipants(all.map((item) => item.participation_id));
+    setShowGantt(all.length > 0);
   };
 
   const isInGantt = (participantId) => selectedParticipants.includes(participantId);
@@ -149,119 +179,109 @@ const formatPhone = (phone) => {
   return '+7(000)000-00-00';
 };
 
-const buildEventBackground = () => {
-  if (!event?.start_date) return [];
+  const buildEventBackground = () => {
+    if (!event?.start_date) {
+      return [];
+    }
 
-  const startDate = new Date(event.start_date);
-  let endDate = new Date(event.end_date || event.start_date);
+    const allParticipants = getAllParticipants(organizers, executors, volunteers, participants);
+    const selected = allParticipants.filter((item) => selectedParticipants.includes(item.participation_id));
 
-  if (startDate.getTime() === endDate.getTime()) {
-    endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 1);
-  }
+    return selected.map((participant) => {
+      const slots = participant.time_slots || [];
+      let start = parseDateTime(event.start_date, event.start_time || '00:00:00');
+      let end = parseDateTime(event.end_date || event.start_date, event.end_time || '23:59:59');
 
-  const allParticipants = [...organizers, ...executors, ...volunteers, ...participants];
-  const selected = allParticipants.filter(p => selectedParticipants.includes(p.participation_id));
+      if (slots.length > 0) {
+        const slotStarts = slots.map((slot) => parseDateTime(slot.participation_date, slot.start_time)).filter(Boolean);
+        const slotEnds = slots.map((slot) => parseDateTime(slot.participation_date, slot.end_time)).filter(Boolean);
+        if (slotStarts.length && slotEnds.length) {
+          start = new Date(Math.min(...slotStarts.map((value) => value.getTime())));
+          end = new Date(Math.max(...slotEnds.map((value) => value.getTime())));
+        }
+      }
 
-  return selected.map(participant => ({
-    id: `bg_${participant.participation_id}`,
-    content: '',
-    start: startDate,
-    end: endDate,
-    group: String(participant.participation_id),
-    type: 'background',
-    style: 'background-color:  rgba(0, 91, 170, 0.15); border-radius: 4px;'
-  }));
-};
+      if (!start || !end || end <= start) {
+        start = parseDateTime(event.start_date, '00:00:00');
+        end = parseDateTime(event.end_date || event.start_date, '23:59:59');
+        if (!end || end <= start) {
+          end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        }
+      }
+
+      return {
+        id: `bg_${participant.participation_id}`,
+        content: '',
+        start,
+        end,
+        group: String(participant.participation_id),
+        type: 'background',
+        style: 'background-color: rgba(0, 91, 170, 0.12); border-radius: 4px;',
+      };
+    });
+  };
 
   const buildGanttItems = () => {
-  const items = [];
-  const allParticipants = [...organizers, ...executors, ...volunteers, ...participants];
-  const selected = allParticipants.filter(p => selectedParticipants.includes(p.participation_id));
+    const items = [];
+    const allParticipants = getAllParticipants(organizers, executors, volunteers, participants);
+    const selected = allParticipants.filter((item) => selectedParticipants.includes(item.participation_id));
 
-  selected.forEach((participant) => {
-    const student = studentsCache.find(s => s.student_id === participant.student_id);
-    const fullName = getFullName(student);
-    const role = participant.role_name || '';
+    selected.forEach((participant) => {
+      const slots = participant.time_slots || [];
 
-    const intervals = participant.intervals || participant.timeSlots || [];
-
-    if (intervals.length === 0) {
-      if (event?.start_date) {
-        const startDate = new Date(event.start_date);
-        let endDate = new Date(event.end_date || event.start_date);
-
-        if (startDate.getTime() === endDate.getTime()) {
-          endDate = new Date(startDate);
-          endDate.setDate(endDate.getDate() + 1);
+      if (slots.length === 0) {
+        const start = parseDateTime(event.start_date, event.start_time || '09:00:00');
+        let end = parseDateTime(event.end_date || event.start_date, event.end_time || '17:00:00');
+        if (!start || !end || end <= start) {
+          end = new Date((start || new Date()).getTime() + 8 * 60 * 60 * 1000);
         }
-
         items.push({
           id: String(participant.participation_id),
-          content: ``,
-          start: startDate,
-          end: endDate,
+          content: '',
+          start: start || new Date(),
+          end,
           group: String(participant.participation_id),
-          style: 'background-color: #005BAA; color: white; border-radius: 0px;height: 10px;'
+          style: 'background-color: #005BAA; border-radius: 4px; height: 24px;',
         });
+        return;
       }
-    } else {
-      intervals.forEach((interval, idx) => {
-        let startDate = new Date(interval.start || interval.start_date);
-        let endDate = new Date(interval.end || interval.end_date);
 
-        if (isNaN(startDate.getTime()) || startDate.getFullYear() < 2000) {
-          const eventDate = new Date(event.start_date);
-          const startTime = interval.start?.split(':') || ['10', '00'];
-          const endTime = interval.end?.split(':') || ['18', '00'];
-
-          startDate = new Date(
-            eventDate.getFullYear(),
-            eventDate.getMonth(),
-            eventDate.getDate(),
-            parseInt(startTime[0]),
-            parseInt(startTime[1])
-          );
-          endDate = new Date(
-            eventDate.getFullYear(),
-            eventDate.getMonth(),
-            eventDate.getDate(),
-            parseInt(endTime[0]),
-            parseInt(endTime[1])
-          );
+      slots.forEach((slot, index) => {
+        const start = parseDateTime(slot.participation_date, slot.start_time);
+        const end = parseDateTime(slot.participation_date, slot.end_time);
+        if (!start || !end || end <= start) {
+          return;
         }
 
         items.push({
-          id: `${participant.participation_id}_${idx}`,
-          content: ``,
-          start: startDate,
-          end: endDate,
+          id: `${participant.participation_id}_${index}`,
+          content: '',
+          start,
+          end,
           group: String(participant.participation_id),
-          style: 'background-color: #005BAA; border-radius: 0px; height: 24px;'
+          style: 'background-color: #005BAA; border-radius: 4px; height: 24px;',
         });
       });
-    }
-  });
+    });
 
-  return items;
-};
+    return items;
+  };
 
   const getGanttGroups = () => {
-  const allParticipants = [...organizers, ...executors, ...volunteers, ...participants];
-  const selected = allParticipants.filter(p => selectedParticipants.includes(p.participation_id));
+    const allParticipants = getAllParticipants(organizers, executors, volunteers, participants);
+    const selected = allParticipants.filter((item) => selectedParticipants.includes(item.participation_id));
 
-  // Создаём группу для КАЖДОГО выбранного участника
-  return selected.map(participant => {
-    const student = studentsCache.find(s => s.student_id === participant.student_id);
-    const fullName = getFullName(student);
-    const role = participant.role_name || 'Участник';
+    return selected.map((participant) => {
+      const student = studentsCache.find((item) => item.student_id === participant.student_id);
+      const fullName = getFullName(student);
+      const role = participant.role_name || 'Участник';
 
-    return {
-      id: String(participant.participation_id),
-      content: `${fullName} (${role})`
-    };
-  });
-};
+      return {
+        id: String(participant.participation_id),
+        content: `${fullName} (${role})`,
+      };
+    });
+  };
 
   if (loading) {
     return (
@@ -286,9 +306,16 @@ const buildEventBackground = () => {
     { key: 'participants', title: 'Участники', data: participants, emptyText: 'Нет участников' }
   ];
 
+  const totalParticipants =
+    organizers.length + executors.length + volunteers.length + participants.length;
+  const ganttItems = buildGanttItems();
+  const ganttGroups = getGanttGroups();
+  const ganttBackground = buildEventBackground();
+  const ganttRange = computeGanttRange(event, [...ganttItems, ...ganttBackground]);
+
   return (
     <div className="event-details-page">
-      <div className="event-details__container">
+      <div className={`event-details__container${showGantt ? ' event-details__container--wide' : ''}`}>
         <button type="button" className="back-link" onClick={goBack}>
           ← Вернуться к списку мероприятий
         </button>
@@ -319,6 +346,9 @@ const buildEventBackground = () => {
 
         <div className="participants-block">
           <h2 className="participants-block__title">Участники</h2>
+          <p className="participants-block__hint">
+            Кнопками + и − выберите, кого показать на диаграмме Ганта ниже.
+          </p>
           {sections.map((section) => (
             <div key={section.key} className="participant-group">
               <div className="participant-group__header" onClick={() => toggleSection(section.key)}>
@@ -351,7 +381,7 @@ const buildEventBackground = () => {
                               <circle cx="12" cy="12" r="10" />
                               <polyline points="12 6 12 12 16 14" />
                             </svg>
-                            <span>{item.hours || item.duration_hours || 6} ч.</span>
+                            <span>{sumParticipationHours(item) || 0} ч.</span>
                           </div>
                           <div className="participant-item__phone">{phone}</div>
 
@@ -385,39 +415,44 @@ const buildEventBackground = () => {
           ))}
         </div>
 
-        {showGantt && selectedParticipants.length > 0 && (
-          <div style={{ marginTop: '30px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ color: '#005BAA', fontSize: '18px', margin: 0 }}>
-                Диаграмма Ганта ({selectedParticipants.length} участников)
-              </h3>
+        <div className="gantt-block">
+          <div className="gantt-block__header">
+            <h2 className="gantt-block__title">
+              Диаграмма Ганта ({selectedParticipants.length} из {totalParticipants})
+            </h2>
+            <div className="gantt-block__actions">
+              <button type="button" className="gantt-block__btn gantt-block__btn--secondary" onClick={addAllToGantt}>
+                Показать всех
+              </button>
               <button
+                type="button"
+                className="gantt-block__btn gantt-block__btn--danger"
                 onClick={() => {
                   setSelectedParticipants([]);
                   setShowGantt(false);
                 }}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#e74c3c',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
               >
-                Очистить все
+                Очистить
               </button>
             </div>
-            <GanttChart
-  items={buildGanttItems()}
-  groups={getGanttGroups()}
-  startDate={event.start_date}
-  endDate={event.end_date || event.start_date}
-  eventItems={buildEventBackground()}
-/>
           </div>
-        )}
+
+          {showGantt && selectedParticipants.length > 0 && ganttItems.length > 0 ? (
+            <GanttChart
+              items={ganttItems}
+              groups={ganttGroups}
+              startDate={ganttRange.start}
+              endDate={ganttRange.end}
+              eventItems={ganttBackground}
+            />
+          ) : (
+            <p className="gantt-block__empty">
+              {totalParticipants === 0
+                ? 'Добавьте участников к мероприятию, чтобы построить диаграмму.'
+                : 'Выберите участников кнопкой + в списке выше или нажмите «Показать всех».'}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
