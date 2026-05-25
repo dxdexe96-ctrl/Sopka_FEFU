@@ -135,7 +135,11 @@ export function EventsListPage() {
     e.stopPropagation();
     window.location.hash = `edit-event?id=${id}`;
   };
-
+ //  переход на страницу деталей мероприятия
+  const goToDetails = (id, e) => {
+    e.stopPropagation();
+    window.location.hash = `event-details?id=${id}`;
+  };
   if (loading) {
     return (
       <div className="events-list-page">
@@ -196,7 +200,15 @@ export function EventsListPage() {
               style={{ cursor: 'pointer' }}
             >
               <div className="event-actions">
-                <button type="button" className="action-btn edit-btn" title="Отредактировать" onClick={(e) => goToEdit(event.event_id, e)}>
+                 <button
+                  type="button"
+                  className="action-btn details-btn"
+                  title="Статистика"
+                  onClick={(e) => goToDetails(event.event_id, e)}
+                >
+                  📶
+                   </button>
+          <button type="button" className="action-btn edit-btn" title="Отредактировать" onClick={(e) => goToEdit(event.event_id, e)}>
                   ✎
                 </button>
                 <button type="button" className="action-btn delete-btn" title="Удалить мероприятие" onClick={(e) => deleteEvent(event.event_id, e)}>
