@@ -1,0 +1,413 @@
+.event-details-page {
+  min-height: 100vh;
+  background: transparent;
+  padding: 30px;
+}
+
+.event-details__container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.event-details__container--wide {
+  max-width: 1200px;
+}
+
+.back-link {
+  background: none;
+  border: none;
+  color: #005BAA;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  padding: 0;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: #003d77;
+  text-decoration: underline;
+}
+
+/* Верхний блок - Информация о мероприятии */
+.event-info-block {
+  background: rgba(0, 91, 170, 0.05);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 30px;
+  color: #1a2a4f;
+  box-shadow: none;
+}
+
+.event-info-block__title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(0, 91, 170, 0.2);
+  color: #005BAA;
+}
+
+.event-info-block__row {
+  display: flex;
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+
+.event-info-block__row:last-child {
+  margin-bottom: 0;
+}
+
+.event-info-block__label {
+  width: 200px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.event-info-block__value {
+  font-weight: 600;
+}
+
+/* Нижний блок - Участники */
+.participants-block {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: none;
+}
+
+.participants-block__title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #005BAA;
+  margin: 0 0 12px 0;
+}
+
+.participants-block__hint {
+  margin: 0 0 20px 0;
+  color: #64748b;
+  font-size: 0.9rem;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #eef2f6;
+}
+
+/* Маленькие блоки (Организаторы, Исполнители и т.д.) -*/
+.participant-group {
+  margin-bottom: 16px;
+  background: rgba(0, 91, 170, 0.05);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.participant-group__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.participant-group__header:hover {
+  background: rgba(0, 91, 170, 0.08);
+}
+
+.participant-group__title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.participant-group__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a2a4f;
+}
+
+.participant-group__count {
+  font-size: 13px;
+  color: #005BAA;
+  background: rgba(0, 91, 170, 0.15);
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.participant-group__toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-icon {
+  transition: transform 0.2s ease;
+  stroke: #005BAA;
+}
+
+.toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.participant-group__content {
+  border-top: 1px solid rgba(0, 91, 170, 0.1);
+  padding: 12px;
+}
+/* Карточка участника */
+.participant-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(0, 91, 170, 0.1);
+}
+
+.participant-item:last-child {
+  margin-bottom: 0;
+}
+
+.participant-item__fio {
+  flex: 2;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.participant-item__hours-block {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #00a86b;
+}
+
+.participant-item__phone {
+  flex: 1.5;
+  font-size: 14px;
+  color: #6c7a8e;
+  text-align: right;
+}
+
+/* Кнопка + */
+.participant-item__plus-btn {
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.participant-item__plus-btn:hover {
+  background: rgba(0, 91, 170, 0.1);
+}
+
+.participant-item__plus-horizontal {
+  position: absolute;
+  width: 14px;
+  height: 2px;
+  background: #005BAA;
+  border-radius: 2px;
+}
+
+.participant-item__plus-vertical {
+  position: absolute;
+  width: 2px;
+  height: 14px;
+  background: #005BAA;
+  border-radius: 2px;
+}
+
+/* Мобильная версия -  */
+@media (max-width: 768px) {
+  .participant-item {
+    flex-wrap: wrap;
+  }
+
+  .participant-item__fio {
+    flex: 1;
+    order: 1;
+  }
+
+  .participant-item__phone {
+    flex: 100%;
+    text-align: left;
+    order: 2;
+    margin-left: 26px;
+  }
+
+  .participant-item__hours {
+    order: 3;
+    text-align: left;
+  }
+
+  .participant-item__plus-btn {
+    order: 4;
+    margin-left: auto;
+  }
+}
+
+.participant-group__empty {
+  padding: 24px;
+  text-align: center;
+  color: #8b9eb0;
+  font-size: 14px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  font-size: 16px;
+  color: #6c7a8e;
+}
+
+.gantt-block {
+  margin-top: 30px;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.gantt-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.gantt-block__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #005baa;
+}
+
+.gantt-block__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.gantt-block__btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gantt-block__btn--secondary {
+  background: #e8f1fa;
+  color: #005baa;
+}
+
+.gantt-block__btn--danger {
+  background: #fde9e7;
+  color: #8c2f28;
+}
+
+.gantt-block__empty {
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+/* Мобильная версия */
+@media (max-width: 768px) {
+  .event-details-page {
+    padding: 16px;
+  }
+
+  .event-info-block {
+    padding: 20px;
+  }
+
+  .event-info-block__title {
+    font-size: 20px;
+  }
+
+  .participants-block {
+    padding: 20px;
+  }
+
+  .participants-block__title {
+    font-size: 20px;
+  }
+
+  .event-info-block__row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .event-info-block__label {
+    width: auto;
+  }
+
+  .participant-group__header {
+    padding: 12px 16px;
+  }
+
+  .participant-group__title-wrapper {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .participant-item {
+    padding: 10px 12px;
+  }
+}
+/* Кнопка - (удалить из диаграммы) */
+.participant-item__minus-btn {
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.participant-item__minus-btn:hover {
+  background: rgba(0, 91, 170, 0.1);
+}
+
+.participant-item__minus-horizontal {
+  position: absolute;
+  width: 14px;
+  height: 2px;
+  background: #e74c3c;
+  border-radius: 2px;
+}
