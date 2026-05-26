@@ -14,6 +14,7 @@ from app.models.event_participation import EventParticipation
 from app.models.event_participation_time_slot import EventParticipationTimeSlot
 from app.models.event_type import EventType
 from app.models.student import Student
+from app.services.fio_inflection import fio_to_dative
 
 MONTH_GENITIVE = (
     "",
@@ -245,8 +246,11 @@ async def build_spravka_payload(
             ]
         dates_line = _format_dates_line(event_dates, start_time, end_time)
 
+    fio_nominative = _student_full_name(student)
+
     return {
-        "fio": _student_full_name(student),
+        "fio": fio_to_dative(student.last_name, student.first_name, student.middle_name),
+        "fio_nominative": fio_nominative,
         "group": student.study_group,
         "dates": dates_line,
         "event_type": event_type_to_genitive(event_type_name),

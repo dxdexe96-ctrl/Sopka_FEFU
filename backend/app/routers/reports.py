@@ -446,7 +446,7 @@ async def download_student_spravka(
         output_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Не удалось сформировать справку.") from exc
 
-    filename = make_filename(payload["fio"])
+    filename = make_filename(payload.get("fio_nominative") or payload["fio"])
     return FileResponse(
         path=output_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

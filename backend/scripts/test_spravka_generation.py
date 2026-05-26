@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.services.fio_inflection import fio_to_dative
 from app.services.generate_spravka import generate_spravka, resolve_template_path
 
 def event_type_to_genitive(name: str) -> str:
@@ -27,7 +28,8 @@ PLACEHOLDERS = [
 ]
 
 payload = {
-    "fio": "Иванов Иван Иванович",
+    "fio": fio_to_dative("Иванов", "Иван", "Иванович"),
+    "fio_nominative": "Иванов Иван Иванович",
     "group": "Б9120-09.03.03пи",
     "dates": "5-6 декабря, с 08:00 до 19:00",
     "event_type": event_type_to_genitive("Олимпиада"),
